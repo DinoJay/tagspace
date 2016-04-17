@@ -25,6 +25,7 @@
   },
   "homepage": "https://github.com/alicoding/react-webpack-babel#readme",
   "dependencies": {
+    "connected-components": "^1.0.0",
     "d3": "^3.5.13",
     "d3-measure-text": "0.0.2",
     "jquery": "^2.2.0",
