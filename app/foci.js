@@ -93,7 +93,7 @@ function outputComp(u, v){
       // console.log("check", check);
       // console.log("e", e);
     }
-    console.log("stack", stack);
+    // console.log("stack", stack);
     result.push(comp);
   }
 }
@@ -124,65 +124,56 @@ function startForce(isVenn) {
                 .linkStrength(this._linkStrength)
                 .linkDistance(d => this._linkDistance(d));
 
+  var pack = d3.layout.pack()
+      .value(function(d) {
+        return d.nbs.length > 0 ? d.nbs.length : 1;
+      })
+      .children(d => d.nbs)
+      .size(this.size());
+
   var values = this.sets();
+  var root = {__key__: "all", nbs: values};
+  var packed = pack(root);
+  console.log("root", packed);
+
   // var totalSize = values.reduce((a, b) => a.size + b.size);
   // console.log("SETS", this.sets());
   // console.log("fociLinks", this._fociLinks.map(d => d.source.__key__ + " - " + d.target.__key__));
 
-  force.links(this._fociLinks);
 
-  // TODO: check
-  if (isVenn) {
-    force.on("tick", (e) => {
-      values.forEach(moveToCenter(e.alpha, 0.01));
-    });
-  }
-
-  var n = 300;
-
-  // var treeData = {id: "clustersTree", size: totalSize, children : values};
-  // var treemap = d3.layout.treemap()
-  //   // .nodes(treeData)
-  //   .size(force.size())
-  //   .sort(function (p, q) { return d3.ascending(p.size, q.size); })
-  //   .value(function (d) { return d.size; });
+  // var n = 300;
   //
-  // var tnodes = treemap.nodes(treeData);
-  // console.log("treeData", tnodes);
-  // tnodes.forEach( d => {
-  //   d.x = d.dx / 2;
-  //   d.y = d.dy / 2;
+  // force.nodes(values);
+  // force.links(this._fociLinks);
+  //
+  // //run the simulation n times
+  // force.start();
+  // for (var i = n * n; i > 0; --i) force.tick();
+  // force.stop();
+  //
+  // values.forEach(function(d) {
+  //   d.center = {
+  //     x: d.x,
+  //     y: d.y
+  //     // x : (d.x + d.dx / 2),
+  //     // y : (d.y + d.dy / 2)
+  //     // z: null
+  //   };
+  //
+  //   // TODO: check
+  //   d.nodes.forEach((e, i)=> {
+  //     e.center = Object.assign({}, d.center);
+  //     e.center.px = e.center.x + (i * 10);
+  //     e.center.py = e.center.y + (i * 10);
+  //     // e.center.z = i;
+  //     // e.dx = d.dx;
+  //     // e.dy = d.dy;
+  //   });
   // });
-  force.nodes(values);
-  //
-  //run the simulation n times
-  force.start();
-  for (var i = n * n; i > 0; --i) force.tick();
-  force.stop();
-
-  values.forEach(function(d) {
-    d.center = {
-      x: d.x,
-      y: d.y
-      // x : (d.x + d.dx / 2),
-      // y : (d.y + d.dy / 2)
-      // z: null
-    };
-
-    // TODO: check
-    d.nodes.forEach((e, i)=> {
-      e.center = Object.assign({}, d.center);
-      e.center.px = e.center.x + (i * 10);
-      e.center.py = e.center.y + (i * 10);
-      // e.center.z = i;
-      // e.dx = d.dx;
-      // e.dy = d.dy;
-    });
-  });
 
   var nodes = _.flatten(values.map(d => d.nodes));
 
-  this.data(nodes);
+  this.data(packed);
 
   return this;
 }
@@ -322,74 +313,114 @@ function extractSets(data) {
           linkedByIndex[d.source + "," + d.target] = true;
       });
 
-  console.log("linkedByIndex", linkedByIndex);
+  // console.log("linkedByIndex", linkedByIndex);
   this._linkedByIndex = linkedByIndex;
 
-
   var edgeList = fociLinks.map(l => [l.source, l.target]);
-  console.log("edgeList", edgeList);
+  // console.log("edgeList", edgeList);
 
   var sortedNodes = _.sortBy(nodes, d => {
-    console.log("d.index", d.index);
+    // console.log("d.index", d.index);
     var conn = connectionsIndex(d.index, linkedByIndex, nodes);
     return conn * d.nodes.length;
   });
-  console.log("sortedNodes", sortedNodes);
+  // console.log("sortedNodes", sortedNodes);
 
-  var sv = sortedNodes.map(d => d.index);
+  var sv = [];
+  function induceNbs(cur) {
+    var neighbors = nbs(cur.index, linkedByIndex, sv);
 
-  var simpleComps = [];
-  while(sv.length !== 0) {
-    var cur = sv.pop();
-    var neighbors = nbs(cur, linkedByIndex, sv);
-    simpleComps.push([cur].concat(neighbors));
+    // console.log("sv", sv);
     sv = _.difference(sv, neighbors);
-    console.log("cur", nodes[cur]);
-    console.log("nbs", neighbors);
-    console.log("sv", sv);
-  }
-  console.log("simpleComps", simpleComps);
-  console.log("nodes", nodes);
+    // console.log("sv", sv);
 
-  var simpleCompNodes = simpleComps.map(c => c.map(i => nodes[i]));
-  console.log("simpleCompNodes", simpleCompNodes);
-  var clusters = simpleCompNodes.map(c => {
-    var sets = _.uniq(c.map(n => n.sets));
-    return {"__key__": sets.join(","), sets: sets, comp: c};
+    // TODO: not correct
+    var sorted = _.sortBy(neighbors.map(i => nodes[i]), d => {
+      var conn = connectionsIndex(d.index, linkedByIndex, sv.map(i => nodes[i]));
+      return conn * d.nodes.length;
+    }).reverse();
+    // console.log("sorted", sorted);
+
+    cur.nbs = sorted;
+
+    cur.nbs.forEach(next => {
+      induceNbs(next);
+    });
+  }
+
+  sv = sortedNodes.map(d => d.index);
+  var simpleComps = [];
+  var hierarchy = [];
+
+  // console.log("sv", sv);
+  while(sv.length !== 0) {
+    // var cur = sv.pop();
+    // var neighbors = nbs(cur, linkedByIndex, sv);
+    // simpleComps.push([cur].concat(neighbors));
+    // hierarchy.push({node: nodes[cur], nbs: neighbors.map(n => nodes[n])});
+    // sv = _.difference(sv, neighbors);
+
+    var cur = sv.pop();
+    var curNode = nodes[cur];
+    induceNbs(curNode);
+    hierarchy.push(curNode);
+    // console.log("nodes[cur]", nodes[cur]);
+    // sv = [];
+    // var neighbors = [];
+    // var nbObjs = neighbors.map(i => nodes[i]);
+    // console.log("seen", seen);
+    // console.log("sv", sv);
+    // sv = _.difference(sv, seen);
+    // hierarchy.push({node: nodes[cur], nbs: nbObjs});
+    // console.log("result", result);
+    // sv = [];
+
+    // console.log("cur", nodes[cur]);
+    // console.log("nbs", neighbors);
+    // console.log("sv", sv);
+  }
+  // console.log("simpleComps", simpleComps);
+  console.log("hierarchy", hierarchy);
+
+
+  // var simpleCompNodes = simpleComps.map(c => c.map(i => nodes[i]));
+  // console.log("simpleCompNodes", simpleCompNodes);
+  var clusters = hierarchy.map(n => {
+    var sets = _.uniq(_.flatten(n.nbs.map(n => n.sets)));
+    var intersets = _.intersection(...n.nbs.map(n => n.sets));
+    n.otherKey = sets.join(",");
+    n.interkey = intersets.join(",");
+    n.otherSets = sets;
+    return n;
   });
   console.log("clusters", clusters);
 
   var vertices = nodes.map((_, i) => i);
   var adjList = convert_edgelist_to_adjlist(vertices, edgeList);
-  console.log("adjList", adjList);
+  // console.log("adjList", adjList);
 
+  var comps = biconnectedComponents(adjList);
 
+  var cut_vertices = _.uniq(_.flatten(comps.map(c => {
+    return c.filter(u => {
+      var n = comps.filter(c => c.find(v => v === u) ? true : false);
+      return n.length > 1;
+    });
+  }).filter(s => s > 0)));
 
-
-
-  // var comps = biconnectedComponents(adjList);
-  //
-  // var cut_vertices = _.uniq(_.flatten(comps.map(c => {
-  //   return c.filter(u => {
-  //     var n = comps.filter(c => c.find(v => v === u) ? true : false);
-  //     return n.length > 1;
-  //   });
-  // }).filter(s => s > 0)));
-  //
   // console.log("cut_vertices", cut_vertices);
-  //
-  // nodes.forEach((d, i) => {
-  //   if (cut_vertices.indexOf(i) !== -1 ) d.cut = true;
-  // });
-  //
-  // var redComps = comps.map(c => c.filter(v => cut_vertices.indexOf(v) === -1));
-  // var compNodes = redComps.map(c => c.map(i => nodes[i]));
-  //
-  // console.log("compNodes sets", compNodes);
 
-  this._sets = nodes;
+  nodes.forEach((d, i) => {
+    if (cut_vertices.indexOf(i) !== -1 ) d.cut = true;
+  });
+
+  var biComps = comps.map(c => c.filter(v => cut_vertices.indexOf(v) === -1));
+  // var biCompNodes = biComps.map(c => c.map(i => nodes[i]));
+
+  // console.log("biconnected components", biCompNodes);
+
+  this._sets = clusters;
   this._fociLinks = fociLinks;
-
 
   return this;
 }
@@ -461,14 +492,15 @@ function connectionsIndex(a, linkedByIndex, nodes) {
   var nb;
   for (var property in linkedByIndex) {
     var s = property.split(",").map(d => parseInt(d));
-    if (s[0] === a) {
+    if (s[0] === a && nodes[s[1]]) {
       nb = nodes[s[1]];
-      console.log("nb", nb);
+      // console.log("nb", nb);
       connections += nb.nodes.length;
     }
-    else { if (s[1] === a) {
+    else {
+      if (s[1] === a && nodes[s[0]]) {
         nb = nodes[s[0]];
-        console.log("nb", nb);
+        // console.log("nb", nb);
         connections+= nb.nodes.length;
       }
 

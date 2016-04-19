@@ -220,15 +220,24 @@ function moveToPos(d, pos, affectSize) {
   d.y = d.y + (pos.y - d.y) * affectSize;
 }
 
+
 d3.json("data.json", function(error, data) {
   // console.log("rawData", rawData);
   // const { data: data, edges: edges } = prepareData(rawData.documents);
   // console.log("tagData", data);
   data.documents.forEach(d => d.r = 12);
 
+  var zoom = d3.behavior.zoom()
+              .scaleExtent([1, 10])
+              .on("zoom", () => {
+                svg.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
+              } );
+
   var svg = d3.select("body").append("svg")
               .attr("width", 1200)
-              .attr("height", 800);
+              .attr("height", 800)
+              .append("g")
+              .call(zoom);
 
   var foci = fociLayout()
                 .gravity(0.01)
@@ -249,6 +258,7 @@ d3.json("data.json", function(error, data) {
                 .startForce();
 
   var nodes = foci.data();
+  console.log("foci data", nodes);
 
   var force = d3.layout.force()
                 .nodes(nodes)
@@ -265,114 +275,130 @@ d3.json("data.json", function(error, data) {
                 .gravity(0)
                 // .friction(0.4)
                 .theta(1);
-
-  // console.log("clusteredDocs", nodes);
-  // console.log("fociLinks", foci.links());
-
-  var forceEdges = _.flattenDeep(foci.links().map(l => {
-    return l.source.nodes.map(s => {
-      return l.target.nodes.map(t => {
-        return {
-          source: force.nodes().findIndex(d => d.id === s.id),
-          target: force.nodes().findIndex(d => d.id === t.id),
-          intersec: l.intersec
-        };
-      });
-    });
-  }));
-
-  force.links(forceEdges);
-  // console.log("forceEdges", forceEdges);
-
-  var edgeList = forceEdges.map(l => [l.source, l.target]);
-  // var linkedByIndex = {};
-  // forceEdges.forEach(function(d) {
-  //   linkedByIndex[d.source + "," + d.target] = true;
+  //
+  // // console.log("clusteredDocs", nodes);
+  // // console.log("fociLinks", foci.links());
+  //
+  var forceEdges = [];
+  // var forceEdges = _.flattenDeep(foci.links().map(l => {
+  //   return l.source.nodes.map(s => {
+  //     return l.target.nodes.map(t => {
+  //       return {
+  //         source: force.nodes().findIndex(d => d.id === s.id),
+  //         target: force.nodes().findIndex(d => d.id === t.id),
+  //         intersec: l.intersec
+  //       };
+  //     });
+  //   });
+  // }));
+  //
+  // force.links(forceEdges);
+  // // console.log("forceEdges", forceEdges);
+  //
+  // var edgeList = forceEdges.map(l => [l.source, l.target]);
+  // // var linkedByIndex = {};
+  // // forceEdges.forEach(function(d) {
+  // //   linkedByIndex[d.source + "," + d.target] = true;
+  // // });
+  // //
+  // // function hasConnections(a) {
+  // //   var connections = 0;
+  // //   for (var property in linkedByIndex) {
+  // //     var s = property.split(",");
+  // //     if ((s[0] == a.index || s[1] == a.index) && linkedByIndex[property])
+  // //       connections++;
+  // //   }
+  // //   return connections;
+  // // }
+  //
+  //
+  // // this should look like:
+  // // {
+  // //   "a2": ["a5"],
+  // //   "a3": ["a6"],
+  // //   "a4": ["a5"],
+  // //   "a5": ["a2", "a4"],
+  // //   "a6": ["a3"],
+  // //   "a7": ["a9"],
+  // //   "a9": ["a7"]
+  // // }
+  // // console.log("edgeList", edgeList);
+  // var vertices = force.nodes().map((_, i) => i);
+  // var adjList = convert_edgelist_to_adjlist(vertices, edgeList);
+  // // console.log("adjList", adjList);
+  //
+  // var comps = biconnectedComponents(adjList);
+  //
+  // var cut_vertices = _.uniq(_.flatten(comps.map(c => {
+  //   return c.filter(u => {
+  //     var n = comps.filter(c => c.find(v => v === u) ? true : false);
+  //     return n.length > 1;
+  //   });
+  // }).filter(s => s > 0)));
+  //
+  // // console.log("cut_vertices", cut_vertices);
+  //
+  // nodes.forEach((d, i) => {
+  //   if (cut_vertices.indexOf(i) !== -1 ) d.cut = true;
   // });
   //
-  // function hasConnections(a) {
-  //   var connections = 0;
-  //   for (var property in linkedByIndex) {
-  //     var s = property.split(",");
-  //     if ((s[0] == a.index || s[1] == a.index) && linkedByIndex[property])
-  //       connections++;
+  // var redComps = comps.map(c => c.filter(v => cut_vertices.indexOf(v) === -1));
+  //
+  // // console.log("redComps", redComps);
+  //
+  // var deeperComps = redComps.map(c => {
+  //   // console.log("comp", c);
+  //   var compLinks = edgeList.filter(l => c.indexOf(l[0]) !== -1 && c.indexOf(l[1]) !== -1);
+  //   // console.log("compLinks", compLinks);
+  //   var adjList = convert_edgelist_to_adjlist(vertices, compLinks);
+  //   // console.log("adjlist", adjList);
+  //   return biconnectedComponents(adjList);
+  // });
+  // // console.log("deeper comps", deeperComps);
+  //
+  // var groups = [];
+  // var visited = {};
+  // var v;
+  // for (v in adjList) {
+  //   if (adjList.hasOwnProperty(v) && !visited[v]) {
+  //     groups.push(bfs(v, adjList, visited));
   //   }
-  //   return connections;
   // }
-
-
-  // this should look like:
-  // {
-  //   "a2": ["a5"],
-  //   "a3": ["a6"],
-  //   "a4": ["a5"],
-  //   "a5": ["a2", "a4"],
-  //   "a6": ["a3"],
-  //   "a7": ["a9"],
-  //   "a9": ["a7"]
-  // }
-  // console.log("edgeList", edgeList);
-  var vertices = force.nodes().map((_, i) => i);
-  var adjList = convert_edgelist_to_adjlist(vertices, edgeList);
-  // console.log("adjList", adjList);
-
-  var comps = biconnectedComponents(adjList);
-
-  var cut_vertices = _.uniq(_.flatten(comps.map(c => {
-    return c.filter(u => {
-      var n = comps.filter(c => c.find(v => v === u) ? true : false);
-      return n.length > 1;
-    });
-  }).filter(s => s > 0)));
-
-  // console.log("cut_vertices", cut_vertices);
-
-  nodes.forEach((d, i) => {
-    if (cut_vertices.indexOf(i) !== -1 ) d.cut = true;
-  });
-
-  var redComps = comps.map(c => c.filter(v => cut_vertices.indexOf(v) === -1));
-
-  // console.log("redComps", redComps);
-
-  var deeperComps = redComps.map(c => {
-    // console.log("comp", c);
-    var compLinks = edgeList.filter(l => c.indexOf(l[0]) !== -1 && c.indexOf(l[1]) !== -1);
-    // console.log("compLinks", compLinks);
-    var adjList = convert_edgelist_to_adjlist(vertices, compLinks);
-    // console.log("adjlist", adjList);
-    return biconnectedComponents(adjList);
-  });
-  // console.log("deeper comps", deeperComps);
-
-  var groups = [];
-  var visited = {};
-  var v;
-  for (v in adjList) {
-    if (adjList.hasOwnProperty(v) && !visited[v]) {
-      groups.push(bfs(v, adjList, visited));
-    }
-  }
-  // TODO: fix later
-  groups = groups.map(g => g.map(n => parseInt(n)));
-  // console.log("groups", groups);
-
-  var groupedNodes = groups.map(g => g.map(i => nodes[parseInt(i)]));
-  var compNodes = redComps.map(c => c.map(i => nodes[i]));
-
-  // console.log("groupedNodes", groupedNodes);
+  // // TODO: fix later
+  // groups = groups.map(g => g.map(n => parseInt(n)));
+  // // console.log("groups", groups);
+  //
+  // var groupedNodes = groups.map(g => g.map(i => nodes[parseInt(i)]));
+  // var compNodes = redComps.map(c => c.map(i => nodes[i]));
+  //
+  // // console.log("groupedNodes", groupedNodes);
 
   var doc = svg.selectAll(".doc")
-    .data(nodes, d => d.id);
+    .data(nodes, d => d.__key__);
+
+  // doc.enter()
+  //    .append("circle")
+  //    .attr("class", "doc")
+  //    .attr("r", d => d.r)
+  //    .attr("stroke", d => d.cut ? "red" : "black")
+  //    .attr("stroke-width", "2")
+  //    .attr("fill", "white");
+     // .call(force.drag);
 
   doc.enter()
-     .append("circle")
-     .attr("class", "doc")
-     .attr("r", d => d.r)
-     .attr("stroke", d => d.cut ? "red" : "black")
-     .attr("stroke-width", "2")
-     .attr("fill", "white")
-     .call(force.drag);
+    .append("g")
+      .attr("class", "doc")
+      .attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; });
+
+  doc.append("circle")
+      .attr("class", "circleDoc")
+      .attr("r", function(d) { return d.r; })
+      .attr("stroke", "black")
+      .attr("stroke-width", "2")
+      .attr("fill", "orange");
+
+  doc.append("title")
+        .text(function(d) { return d.__key__; });
 
   var link = svg
       .insert("g", ":first-child")
@@ -383,22 +409,22 @@ d3.json("data.json", function(error, data) {
      .attr("class", "link");
 
   force.on("tick", function(e) {
-    doc.each(d => {
-      moveToPos(d, {x: d.center.x, y: d.center.y}, e.alpha * 2);
-    });
-    doc.each((collide(doc.data(), e.alpha, 0)));
-
-    svg.selectAll("path.group")
-      .data(compNodes)
-        .attr("d", groupPath)
-      .enter().insert("path", "circle")
-        .attr("class", "group")
-        .style("fill", "red")
-        .style("stroke", groupFill)
-        // .style("stroke-width", 40)
-        .style("stroke-linejoin", "round")
-        .style("opacity", 0.2)
-        .attr("d", groupPath);
+    // doc.each(d => {
+    //   moveToPos(d, {x: d.center.x, y: d.center.y}, e.alpha * 2);
+    // });
+    // doc.each((collide(doc.data(), e.alpha, 0)));
+    //
+    // svg.selectAll("path.group")
+    //   .data(compNodes)
+    //     .attr("d", groupPath)
+    //   .enter().insert("path", "circle")
+    //     .attr("class", "group")
+    //     .style("fill", "red")
+    //     .style("stroke", groupFill)
+    //     // .style("stroke-width", 40)
+    //     .style("stroke-linejoin", "round")
+    //     .style("opacity", 0.2)
+    //     .attr("d", groupPath);
 
     // svg.selectAll("path.comp")
     //   .data(groupedNodes)
@@ -422,5 +448,6 @@ d3.json("data.json", function(error, data) {
 
   force.start();
 
-  doc.on("click", d => console.log("d", d.tags));
+  d3.selectAll(".doc").on("click", d => console.log("d", d));
+
 });
