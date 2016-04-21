@@ -4,6 +4,23 @@ import fociLayout from "./foci";
 
 require("./style/style.less");
 
+
+function nbsDirected(a, linkedByIndex) {
+  var nbs = [];
+  for (var property in linkedByIndex) {
+    var s = property.split(",").map(d => parseInt(d));
+    // if (s[0] === a) {
+    //   nbs.push(s[1]);
+    // }
+    // else {
+      if (s[1] === a) {
+        nbs.push(s[0]);
+      }
+    // }
+  }
+  return _.uniq(nbs);
+}
+
 function biconnectedComponents(graph){
 
   var n = Object.keys(graph).length; // number vertices
@@ -235,20 +252,24 @@ d3.json("data.json", function(error, data) {
 
   var svg = d3.select("body").append("svg")
               .attr("width", 1200)
-              .attr("height", 800)
-              .append("g")
-              .call(zoom);
+              .attr("height", 800);
+              // .append("g")
+              // .attr("transform", "translate(" + [75, 75] + ")")
+              // .call(zoom);
 
   var foci = fociLayout()
                 .gravity(0.01)
                 .sets(data.documents)
                 .size([800, 500])
                 .charge(function(d) {
-                  var conn = this.hasConnections(d);
-                  return conn > 0 ? -100 / conn : -500;})
+                  // var conn = this.hasConnections(d);
+                  // return conn > 0 ? -100 / conn : -100;
+                  return -30;
+                })
                 .linkStrength(1)
                 .linkDistance(function(l){
-                  return l.intersec.length > 0 ? 200 / l.intersec.length : 100000;
+                  return 100;
+                  // return l.intersec.length > 0 ? 200 / l.intersec.length : 100000;
                   // var conn1 = this.hasConnections(l.source);
                   // var conn2 = this.hasConnections(l.target);
                   // var conn = conn1 > conn2 ? conn1 : conn2;
@@ -258,10 +279,10 @@ d3.json("data.json", function(error, data) {
                 .startForce();
 
   var nodes = foci.data();
-  console.log("foci data", nodes);
+  // console.log("foci data", nodes);
 
   var force = d3.layout.force()
-                .nodes(nodes)
+                .nodes(_.flatten(nodes.map(d => d.nodes)))
                 .size([800, 500])
                 .charge(0)
                 .linkStrength(0)
@@ -276,25 +297,43 @@ d3.json("data.json", function(error, data) {
                 // .friction(0.4)
                 .theta(1);
   //
-  // // console.log("clusteredDocs", nodes);
+  // console.log("clusteredDocs", force.nodes());
   // // console.log("fociLinks", foci.links());
   //
-  var forceEdges = [];
+  // console.log("fociLinks", foci.links());
+  // var forceEdges = [];
+  // TODO:
   // var forceEdges = _.flattenDeep(foci.links().map(l => {
   //   return l.source.nodes.map(s => {
   //     return l.target.nodes.map(t => {
   //       return {
-  //         source: force.nodes().findIndex(d => d.id === s.id),
-  //         target: force.nodes().findIndex(d => d.id === t.id),
-  //         intersec: l.intersec
+  //         source: force.nodes().findIndex(d => d.__setKey__ === s.__setKey__),
+  //         target: force.nodes().findIndex(d => d.__setKey__ === t.__setKey__)
+  //         // intersec: l.intersec
   //       };
   //     });
   //   });
   // }));
+
+
+  force.start();
+  // var forceEdges = _.flattenDeep(force.nodes().map(n => {
+  //   var links = foci.links()
+  //                   .filter(l => n.__setKey__ === l.source.__key__ || n.__setKey__ === l.target.__key__)
+  //                   .map(l => {
+  //                     return {
+  //                       source: force.nodes().find(n => n.__setKey__ === l.source.__key__).index,
+  //                       target: force.nodes().find(n => n.__setKey__ === l.target.__key__).index
+  //                     };
+  //                   });
+  //   return links;
+  // }));
   //
-  // force.links(forceEdges);
-  // // console.log("forceEdges", forceEdges);
-  //
+  // console.log("forceEdges before", forceEdges);
+  // force.links(forceEdges.slice(0)); //
+  // console.log("forceEdges", force.links());
+
+  // console.log("forceEdges", forceEdges);
   // var edgeList = forceEdges.map(l => [l.source, l.target]);
   // // var linkedByIndex = {};
   // // forceEdges.forEach(function(d) {
@@ -373,45 +412,57 @@ d3.json("data.json", function(error, data) {
   //
   // // console.log("groupedNodes", groupedNodes);
 
-  var doc = svg.selectAll(".doc")
+  var circle = svg.selectAll(".circle")
     .data(nodes, d => d.__key__);
 
-  // doc.enter()
+  // circle.enter()
   //    .append("circle")
-  //    .attr("class", "doc")
+  //    .attr("class", "circle")
   //    .attr("r", d => d.r)
   //    .attr("stroke", d => d.cut ? "red" : "black")
   //    .attr("stroke-width", "2")
   //    .attr("fill", "white");
      // .call(force.drag);
 
-  doc.enter()
-    .append("g")
-      .attr("class", "doc")
-      .attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; });
+  // circle.enter()
+  //   .append("g")
+  //     .attr("class", "circle")
+  //     .attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; });
+  //
+  // circle.append("circle")
+  //     .attr("class", "circleDoc")
+  //     .attr("r", function(d) { return d.r; })
+  //     .attr("stroke", "black")
+  //     .attr("stroke-width", "2")
+  //     .attr("fill", "orange");
 
-  doc.append("circle")
-      .attr("class", "circleDoc")
-      .attr("r", function(d) { return d.r; })
+
+
+  var doc = svg.selectAll(".doc")
+    .data(nodes, d => d.__key__);
+
+  doc
+    .enter()
+    .append("circle")
+      .attr("class", "doc")
+      .attr("r", 12)
       .attr("stroke", "black")
       .attr("stroke-width", "2")
-      .attr("fill", "orange");
-
-  doc.append("title")
+      .attr("fill", "navy")
+      .append("title")
         .text(function(d) { return d.__key__; });
 
-  var link = svg
-      .insert("g", ":first-child")
-      .selectAll(".link")
-     .data(forceEdges)
-     .enter().append("line")
-     //    .attr("class", function(d) { return "link " + d.type; })
-     .attr("class", "link");
+  var link = svg.selectAll(".link").append("g")
+               .data(foci.links());
+
+  link.enter().append("line")
+               //    .attr("class", function(d) { return "link " + d.type; })
+               .attr("class", "link");
 
   force.on("tick", function(e) {
-    // doc.each(d => {
-    //   moveToPos(d, {x: d.center.x, y: d.center.y}, e.alpha * 2);
-    // });
+    doc.each(d => {
+      moveToPos(d, {x: d.center.x, y: d.center.y}, e.alpha * 2);
+    });
     // doc.each((collide(doc.data(), e.alpha, 0)));
     //
     // svg.selectAll("path.group")
@@ -444,10 +495,12 @@ d3.json("data.json", function(error, data) {
       .attr("y2", d =>  d.target.y);
 
     doc.attr("transform", d => "translate(" + [d.x, d.y] + ")");
+    // doc.attr("cx", d => d.x);
+    // doc.attr("cy", d => d.y);
   });
 
   force.start();
 
-  d3.selectAll(".doc").on("click", d => console.log("d", d));
+  doc.on("click", d => console.log("d nbs", d.__key__, nbsDirected(d.index, foci._linkedByIndex).map(i => nodes[i])));
 
 });
