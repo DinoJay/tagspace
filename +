@@ -4,13 +4,26 @@ import fociLayout from "./foci";
 import marching_squares from "./marchingSquaresHelpers";
 import miserables from "./miserables";
 
-
 require("./style/style.less");
 
-// for (var i = n * n; i > 0; --i) f.tick();
-// f.stop();
+var f = d3.layout.force()
+  .charge(-1000)
+  .gravity(0.5)
+  .linkDistance(d => Math.sqrt(d.value))
+  .theta(0.5)
+  .nodes(miserables.nodes)
+  .links(miserables.links);
 
+var n = 300;
+f.start();
+for (var i = n * n; i > 0; --i) f.tick();
+f.stop();
 
+var nested_groups = d3.nest()
+  .key(function(d) { return d.group; })
+  .entries(f.nodes());
+
+console.log("nested_groups", nested_groups);
 
 function nbsDirected(a, linkedByIndex) {
   var nbs = [];
@@ -279,13 +292,12 @@ d3.json("data.json", function(error, data) {
                 .charge(function(d) {
                   // var conn = this.hasConnections(d);
                   // return conn > 0 ? -100 / conn : -100;
-                  // return - d.nodes.length * 40;
-                  return -60;
+                  return - d.nodes.length * 40;
                 })
                 // .linkStrength(1)
                 .linkDistance(function(l){
                   // var conn = this.connections(l.source);
-                  return 30;
+                  return 100;
                 })
                 .start();
 
@@ -491,27 +503,28 @@ d3.json("data.json", function(error, data) {
 
 
 
+  var segs = marching_squares(nested_groups);
+  console.log("segs", segs);
 
   force.on("tick", function(e) {
-
     doc.each(d => {
       moveToPos(d, {x: d.center.x, y: d.center.y}, e.alpha * 2);
     }); // doc.each((collide(doc.data(), e.alpha, 0)));
     //
-    // svg.selectAll("path.group")
-    //   .data(foci.groups())
-    //     .attr("d", d => groupPath(d.values))
-    //   .enter()
-    //     // .insert("g")
-    //     .insert("path", "circle")
-    //     .attr("class", "group")
-    //     .style("fill", (_, i) => fill(i))
-    //     .attr("title", d => d.key)
-    //     .style("stroke", groupFill)
-    //     // .style("stroke-width", 40)
-    //     .style("stroke-linejoin", "round")
-    //     .style("opacity", 0.2)
-    //     .attr("d", d => groupPath(d.values));
+    svg.selectAll("path.group")
+      .data(foci.groups())
+        .attr("d", d => groupPath(d.values))
+      .enter()
+        // .insert("g")
+        .insert("path", "circle")
+        .attr("class", "group")
+        .style("fill", (_, i) => fill(i))
+        .attr("title", d => d.key)
+        .style("stroke", groupFill)
+        // .style("stroke-width", 40)
+        .style("stroke-linejoin", "round")
+        .style("opacity", 0.2)
+        .attr("d", d => groupPath(d.values));
 
     // svg.selectAll("path.comp")
     //   .data(groupedNodes)
@@ -535,8 +548,6 @@ d3.json("data.json", function(error, data) {
     // doc.attr("transform", function(d) { return "rotate(" + (d.x - 90) + ")translate(" + d.y + ")"; })
     doc.attr("x", d => d.x - d.width / 2);
     doc.attr("y", d => d.y - d.width / 2);
-
-    marching_squares(svg, foci.groups());
   });
 
   force.start();

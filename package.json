@@ -27,9 +27,12 @@
   "dependencies": {
     "connected-components": "^1.0.0",
     "d3": "^3.5.13",
+    "d3-force": "^0.3.0",
     "d3-measure-text": "0.0.2",
     "jquery": "^2.2.0",
-    "lodash": "^4.0.1"
+    "lodash": "^4.0.1",
+    "simplify-js": "^1.2.1",
+    "webcola": "git://github.com/tgdwyer/WebCola#master"
   },
   "devDependencies": {
     "babel-core": "^6.4.5",

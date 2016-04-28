@@ -10,6 +10,7 @@
             ],
             "tags": [
                 "data analysis",
+                "presentation",
                 "heterogeneous data",
                 "management",
                 "visual"
@@ -122,6 +123,7 @@
             ],
             "tags": [
                 "interaction",
+                "training",
                 "presentation"
             ],
             "createdDate": "Oct 30, 2015 3:00:55 PM",
@@ -299,7 +301,8 @@
                 "artVis",
                 "artwork explorer",
                 "faceted browsing",
-                "information visualisation"
+                "information visualisation",
+                "training"
             ],
             "createdDate": "Oct 30, 2015 3:00:55 PM",
             "tasks": [

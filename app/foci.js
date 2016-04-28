@@ -1,5 +1,6 @@
 import d3 from "d3";
 import _ from "lodash";
+import cola from "webcola";
 
 var convert_edgelist_to_adjlist = function(vertices, edgelist) {
   var adjlist = {};
@@ -28,7 +29,7 @@ var convert_edgelist_to_adjlist = function(vertices, edgelist) {
   return adjlist;
 };
 
-function biconnectedComponents(graph){
+function biconnectedComponents(graph) {
 
   var n = Object.keys(graph).length; // number vertices
   var result = [];
@@ -41,8 +42,8 @@ function biconnectedComponents(graph){
   var d = []; // ??
   var parent = d3.range(0, n).map(() => -1);
 
-  for(var u=0; u<n; u++){
-    if(!visited[u]){
+  for (var u = 0; u < n; u++) {
+    if (!visited[u]) {
       // console.log("u", u);
       dfsVisit(u);
     }
@@ -50,43 +51,43 @@ function biconnectedComponents(graph){
 
   return result.map(g => _.uniq(g));
 
-  function dfsVisit(u){
+  function dfsVisit(u) {
     visited[u] = true;
     d[u] = low[u] = count++;
     // console.log("graph u", graph[u]);
-    graph[u].forEach(e =>{
+    graph[u].forEach(e => {
       var min = Math.min(u, e);
       var max = Math.max(u, e);
       var v = u === min ? max : min;
 
-      if(v==parent[u]){
+      if (v == parent[u]) {
         return;
       }
-      if(!visited[v]){
+      if (!visited[v]) {
         stack.push([u, e]);
         parent[v] = u;
         dfsVisit(v);
-        if (low[v] >= d[u]){
+        if (low[v] >= d[u]) {
           outputComp(u, v);
         }
         low[u] = Math.min(low[u], low[v]);
-      }else
-        if(d[v]<d[u]) {
-          stack.push([u, e]);
-          low[u] = Math.min(low[u], d[v]);
-        } else {
-              // dont push edge on stack when v has been visited
-              // and has distance more than that of u in the dfs tree
+      } else
+      if (d[v] < d[u]) {
+        stack.push([u, e]);
+        low[u] = Math.min(low[u], d[v]);
+      } else {
+        // dont push edge on stack when v has been visited
+        // and has distance more than that of u in the dfs tree
       }
     });
   }
 
-function outputComp(u, v){
+  function outputComp(u, v) {
     console.log("New Biconnected Component Found");
     var check = [u, v];
     var comp = [];
 
-    while(stack.length > 0 && _.difference(check, e).length > 0) {
+    while (stack.length > 0 && _.difference(check, e).length > 0) {
       var e = stack.pop();
       comp.push(e[0], e[1]);
       // var diff = _.difference(check, e);
@@ -115,83 +116,218 @@ function moveToCenter(alpha, energy) {
 //   };
 // }
 
-function startForce() {
+function groups(nodes) {
+  if (!nodes) return this._groups;
 
-  var force = d3.layout.force()
-                .charge(d => this._charge(d))// * d.size)
-                .size(this.size())
-                .gravity(this._gravity)
-                .linkStrength(this._linkStrength)
-                .linkDistance(d => this._linkDistance(d));
+  var spread_data = _.flatten(nodes.map(n => {
+      var clones = n.sets.map(t => {
+        var clone = _.cloneDeep(n);
+        clone.tag = t;
+        return clone;
+      }).filter(d => d.__key__ !== "root");
+      return clones;
+    }));
 
-  // var pack = d3.layout.pack()
-  //     .value(function(d) {
-  //       return d.nbs.length > 0 ? d.nbs.length : 1;
-  //     })
-  //     // .radius(d => {
-  //     //   return d.nodes ? d.nodes.length * 10 : 30;
-  //     // })
-  //     .padding(10)
-  //     .children(d => d.nbs)
-  //     .size(this.size());
+  var nested_data = d3.nest()
+    .key(d => d.tag)
+    .entries(spread_data).filter(d => d.values.length > 1);
+
+  var uniq_nested_data = _.uniqWith(nested_data, (a, b) => {
+      var aKeys = a.values.map(d => d.__key__);
+      var bKeys = b.values.map(d => d.__key__);
+
+      return _.isEqual(aKeys, bKeys);
+  });
+
+  var groups = uniq_nested_data.map(g => {
+    g.id = g.key;
+    g.leaves = g.values.map(d => d.index);
+    return g;
+  });
+
+  console.log("groups.length", groups.length);
+
+  return groups;
+}
+
+
+function start() {
+
+  var linkedByIndex = {};
+  this.links().forEach(function(d) {
+    linkedByIndex[d.source + "," + d.target] = true;
+  });
+
+  function hierarchy(cur, nodes, linkedByIndex) {
+    cur.children = neighbors(cur, linkedByIndex, nodes);
+    cur.value = cur.children.length;
+    console.log("cur", cur);
+    console.log("cur children", cur.children);
+
+    cur.children.forEach(next => {
+      // if(seen.indexOf(next) === -1)
+      hierarchy(next, nodes, linkedByIndex);
+    });
+  }
+
+  function runForce(nodes, that) {
+
+
+    var force = d3.layout.force()
+      .charge(d => that._charge(d)) // * d.size)
+      .size(that.size())
+      .gravity(that._gravity)
+      .linkStrength(that._linkStrength)
+
+      .linkDistance(d => that._linkDistance(d));
+
+
+    nodes.forEach(d => {
+      d.width = 11 * 2;
+      d.height = 20 * 2;
+    });
+
+
+    var colaForce = cola.d3adaptor()
+      // .flowLayout("y", 12)
+      .handleDisconnected(true)
+      .avoidOverlaps(true)
+      .size(that.size());
+      // .jaccardLinkLengths(40, 0.7);
+
+    colaForce
+      .nodes(nodes)
+      .links(links)
+      .linkDistance(l => {
+        return l.source.nodes ? l.source.nodes.length * 10 : 20;
+        // return 40;
+      });
+      // .groups(gs);
+      //
+
+    // colaForce
+    //   .start(20, 0, 10);
+
+    // force.nodes(nodes);
+    // console.log("links", links);
+    force.nodes(nodes);
+    force.links(links);
+
+    var n = 300;
+    force.start();
+    for (var i = n * n; i > 0; --i) force.tick();
+    force.stop();
+
+    var gs = that.groups(force.nodes());
+    that._groups = gs;
+
+    console.log("GS", gs);
+
+    nodes.forEach(function(d) {
+      // console.log("d", d);
+      d.center = {
+        x: d.x,
+        y: d.y
+      };
+
+      // TODO: check
+      d.nodes.forEach((e)=> {
+        e.center = Object.assign({}, d.center);
+        e.bounds = Object.assign({}, d.bounds);
+        // e.center.px = e.center.x + (i * 10);
+        // e.center.py = e.center.y + (i * 10);
+        // // e.center.z = i;
+        // e.dx = d.dx;
+        // e.dy = d.dy;
+      });
+    });
+    return nodes;
+  }
+
+
+
+  // var diagonal = d3.svg.diagonal.radial()
+  //     .projection(function(d) { return [d.y, d.x / 180 * Math.PI]; });
+
+
+  function runTree() {
+
+    var root = {
+      index:     nodes.length,
+      level:     0,
+      "__key__": "root",
+      sets     : [],
+      // children: nodes.filter(d => d.level === 0),
+      nodes: []
+    };
+
+    nodes.forEach(d => {
+      if (d.level === 1) {
+        links.push({
+          source: root.index,
+          target: d.index
+        });
+      }
+    });
+
+    nodes.push(root);
+
+
+    var diameter = 960;
+
+    var tree = d3.layout.tree()
+        .size([360, diameter / 2 - 120])
+        .separation(function(a, b) { return (a.parent == b.parent ? 1 : 2) / a.depth; });
+
+    var treed = tree.nodes(root);
+
+
+    // var packed = pack(root);
+    // // //
+    treed.forEach(d => {
+      d.center = {
+        x: d.x,
+        y: d.y
+      };
+    });
+
+    return treed;
+  }
 
   var nodes = this.sets();
   var links = this.links();
 
-  // var root = {__key__: "all", nbs: values};
-  // var packed = pack(root);
-  // packed.forEach(d => {
-  //   d.center = {x: d.x, y: d.y - d.r};
-  // });
-  // console.log("root", packed);
+  console.log("NODES", nodes);
+
+  nodes = runForce(nodes, this);
+
+  console.log("linkedByIndex", linkedByIndex);
+  // hierarchy(root, nodes, linkedByIndex);
+
+  //
+  // console.log("treed", treed);
+  // console.log("treed center", treed.filter(d => !d.center.x));
+
+  // console.log("packed", packed.filter(d => !d));
 
   // var totalSize = values.reduce((a, b) => a.size + b.size);
   // console.log("SETS", this.sets());
   // console.log("fociLinks", this._fociLinks.map(d => d.source.__key__ + " - " + d.target.__key__));
 
-
-
   // var packedNodes = packed.filter(d => d.nodes);
 
-  // packedNodes.forEach(d => {
+  // nodes.forEach(d => {
   //   d.x = null;
   //   d.y = null;
   //   d.px = null;
   //   d.py = null;
   // });
-  // var links = pack.links(packedNodes);
 
-  // force.nodes(packedNodes);
-  console.log("links", links);
-  force.nodes(nodes);
-  force.links(links);
+  // var edges = pack.links(packedNodes);
 
+  //
   // run the simulation n times
-  var n = 300;
-  force.start();
-  for (var i = n * n; i > 0; --i) force.tick();
-  force.stop();
 
-  nodes.forEach(function(d) {
-    // console.log("d", d);
-    d.center = {
-      x: d.x,
-      y: d.y
-      // x : (d.x + d.dx / 2),
-      // y : (d.y + d.dy / 2)
-      // z: null
-    };
-
-    // TODO: check
-    d.nodes.forEach((e, i)=> {
-      e.center = Object.assign({}, d.center);
-      e.center.px = e.center.x + (i * 10);
-      e.center.py = e.center.y + (i * 10);
-      // e.center.z = i;
-      // e.dx = d.dx;
-      // e.dy = d.dy;
-    });
-  });
 
   // var nodes = _.flatten(values.map(d => d.nodes));
 
@@ -213,37 +349,26 @@ function links() {
 }
 
 function extractSets(data) {
-  if (!data) return this._sets;
 
-  var copyData = _.cloneDeep(data);
-
+  var copyData = data.map(d => d);
   // var oldSets = null; //this._sets, //foci.sets() ,
 
   var sets = d3.map({}, function(d) {
-      return d.__key__;
-    });
+    return d.__key__;
+  });
 
-  var fociLinks = [],
-    individualSets = d3.map(),
+
+  var individualSets = d3.map(),
     set,
     key,
     i,
     n = copyData.length;
 
-  // function getKey(set, selected) {
-  //   // filter the items from the invalid list, out of the complete list
-  //   var tags = set.filter(d => selected.indexOf(d) !== -1);
-  //   // console.log("set", set);
-  //   // console.log("tags", tags);
-  //   return tags;
-  //
-  // }
-
   // TODO: rename __key__
   for (i = -1; ++i < n;) {
     // TODO: change it later, too specific
     set = copyData[i].tags;
-    key = set.sort().join(","); //so taht we have the same key as in https://github.com/benfred/foci.js
+    key = set.sort().join(",");
     if (set.length) {
       set.forEach(function(val) {
         if (individualSets.get(val)) {
@@ -279,209 +404,208 @@ function extractSets(data) {
     }
   });
 
-  // TODO: clean up everything
-  var nodes = sets.values().filter(v => v.nodes.length > 0);
+  return sets;
+}
 
-  nodes.forEach((d, i) => d.index = i);
+function initSets(data) {
+  if (!data) return this._sets;
+
+  var sets = extractSets(data);
+  var setData = sets.values();
+
+  var G = prepareGraph(setData);
+
+  // check
+  this._sets = G.nodes;
+  this._fociLinks = G.edges;
+
+  return this;
+}
+
+function prepareGraph(setData) {
+  // if (!data) return this._sets;
+
+  var fociLinks = [];
+  // TODO: filter out before
+  var nodes = setData.filter(v => v.nodes.length > 0);
+
+  nodes.forEach((d, i) => {
+    d.level = 0;
+    d.index = i;
+  });
 
   nodes.forEach(s => {
     nodes.forEach(t => {
-    var intersect = _.intersection(s.sets, t.sets);
-    var linkExist = fociLinks.findIndex(l => l.source === s.index && l.target === t.index || l.target === s.index && l.source === t.index);
+      var intersect = _.intersection(s.sets, t.sets);
+      var linkExist = fociLinks.findIndex(l => (
+        l.source === s.index && l.target === t.index || l.target === s.index && l.source === t.index)) === -1 ? false : true;
 
-    if (s.index !== t.index && intersect.length > 0 && linkExist === -1)
-      fociLinks.push({
-        source: s.index,
-        target: t.index,
-        intersec: intersect
-      });
+      if (s.index !== t.index && intersect.length > 0)
+        fociLinks.push({
+          source: s.index,
+          target: t.index,
+          intersec: intersect
+        });
     });
   });
 
-  console.log("foci nodes", nodes);
-  console.log("fociLinks", fociLinks);
-  console.log("fociLinks length", fociLinks.length);
-
-  // console.log("focilinks", fociLinks);
-  // // reset the size for each set.
-  // sets.forEach((k, v) => {
-  //   v.size = this._clusterSize(v.size);
-  //   if ((n = v.sets.length) && n != 1) {
-  //     for (i = -1; ++i < n;) {
-  //       var target = sets.get(k);
-  //       var source = sets.get(v.sets[i]);
-  //       var intersec = _.intersection(target.sets, source.sets);
-  //       fociLinks.push({
-  //       source: source,
-  //       target: target,
-  //         intersec: intersec
-  //       });
-  //     }
-  //   }
-  //
-  //   if (oldSets && (set = oldSets.get(k))) {
-  //     v.center = set.center;
-  //     v.x = set.x;
-  //     v.y = set.y;
-  //   }
-  // });
+  // console.log("foci nodes", nodes);
+  // console.log("fociLinks", fociLinks);
+  // console.log("fociLinks length", fociLinks.length);
 
   var linkedByIndex = {};
   fociLinks.forEach(function(d) {
     linkedByIndex[d.source + "," + d.target] = true;
   });
 
-  console.log("linkedByIndex", linkedByIndex);
+  // console.log("linkedByIndex", linkedByIndex);
 
-  this._linkedByIndex = linkedByIndex;
+  // this._linkedByIndex = linkedByIndex;
 
-  var edgeList = fociLinks.map(l => [l.source, l.target]);
-  // console.log("edgeList", edgeList);
+  // TODO: do more testing
 
-  var sortedNodes = _.sortBy(nodes, d => {
-    // console.log("d.index", d.index);
-    // var conn = connectionsIndex(d.index, linkedByIndex, nodes);
-    // return conn * d.nodes.length;
+  return forest(nodes, linkedByIndex);
 
-    return d.sets.length;
-  }).reverse();
 
-  var sv = sortedNodes.map(n => n.index);
-  console.log("sortedNodes", sortedNodes);
+  function forest(nodes, linkedByIndex) {
+      function graphToDAG(startIndex) {
+        var G = {
+          nodes: [],
+          vertices: [],
+          edges: []
+        };
+        var q = [];
+        var visitedTags = [];
+        var level = 1;
 
-  console.log("sv", sv);
-  // var sv = [];
-  // var seen = [];
-  function induceNbs(cur) {
+        q.push(startIndex);
+        G.vertices.push(startIndex);
 
-    // console.log("cur", cur);
-    var nbs = neighbors(cur.index, linkedByIndex, sv);
-    // console.log("nbs", neighbors);
-    // seen.push(cur.index);
+        var startNode = nodes[startIndex];
 
-    sv = _.difference(sv, nbs);
+        startNode.level = level;
+        level += 1;
+        // console.log("startLevel", startNode.level);
+
+        G.nodes.push(startNode);
+
+        // console.log("startIndex", startIndex);
+
+        while (q.length !== 0) {
+
+          // console.log("q", q);
+          var u = q.pop(); // pop front
+
+          // console.log("u index", u);
+          // console.log("u", nodes[u]);
+          // console.log("seen", tags);
+          // console.log("sets", nodes[u].sets);
+          // console.log("diff", _.difference(nodes[u].sets, tags));
+          var vs = nbsByTag(u, linkedByIndex, nodes, visitedTags);
+
+          var sorted = _.sortBy(vs.map(i => nodes[i]), d => {
+            return d.sets.length;
+            // var conn = connectionsIndex(d.index, linkedByIndex, sv.map(i => nodes[i]));
+            // return 100 * conn / d.sets.length;
+          }).map(d => d.index).reverse();
+
+          // console.log("vs", sorted.map(u => nodes[u].__key__));
+
+          // console.log("sorted", sorted.map(i => nodes[i]));
+
+          sorted.forEach(v => {
+            if (G.vertices.indexOf(v) !== -1) {
+              var filterOut = G.edges.filter(l => l.target === v);
+              // console.log("filterOut", filterOut);
+              G.edges = _.difference(G.edges, filterOut);
+
+              G.edges.push({
+                source: u,
+                target: v
+              });
+            } else {
+              G.vertices.push(v);
+              var node = nodes[v];
+              node.level = level;
+              G.nodes.push(node);
+
+              G.edges.push({
+                source: u,
+                target: v
+              });
+              q.push(v);
+
+              q = _.uniq(q);
+              q = _.sortBy(q.map(i => nodes[i]), d => {
+                return d.sets.length;
+              }).map(d => d.index).reverse();
+            }
+          });
+          level = level + 1;
+          visitedTags.push(...nodes[u].sets);
+        }
+        return G;
+      }
+
+      var sortedNodes = _.sortBy(nodes, d => {
+        // console.log("d.index", d.index);
+        // var conn = connectionsIndex(d.index, linkedByIndex, nodes);
+        // return conn * d.nodes.length;
+
+        return d.sets.length;
+      }).reverse();
+
+      var sv = sortedNodes.map(n => n.index);
+      // console.log("sortedNodes", sortedNodes);
+
+      var edges = [];
+      var newNodes = [];
+      while (sv.length > 0) {
+        var G = graphToDAG(sv.pop(), nodes);
+        // console.log("G.nodes", G.vertices);
+        // console.log("sv", sv);
+        sv = _.difference(sv, G.vertices);
+        // console.log("diff", sv);
+        edges = edges.concat(G.edges);
+        newNodes = newNodes.concat(G.nodes);
+      }
+
+      newNodes = _.sortBy(newNodes, d => d.index);
+      // console.log("G nodes", newNodes);
+
+      // console.log("nodes len", nodes.length, "newNodes len", newNodes.length);
+      return {
+        nodes: newNodes,
+        edges: edges,
+        linkedByIndex: linkedByIndex
+      };
+    }
     // console.log("sv", sv);
-
-    // TODO: not correct
-    var sorted = _.sortBy(nbs.map(i => nodes[i]), d => {
-      var conn = connectionsIndex(d.index, linkedByIndex, sv.map(i => nodes[i]));
-      return 100 * conn / d.sets.length;
-    });
-    // console.log("sorted", sorted);
-
-    cur.nbs = sorted;
-
-    cur.nbs.forEach(next => {
-      // if(seen.indexOf(next) === -1)
-        induceNbs(next);
-    });
-  }
-  //
-  // sv = sortedNodes.map(d => d.index);
-  // console.log("sv", sv);
-  //
-  // var simpleComps = [];
-  // var hierarchy = [];
-
-// old_undirected graph G
-//  new_directed graph D
-//  dequeue Q
-//  v is any node in G
-//  add v to D
-//  Q.push_back(v)
-//  while(Q is not empty):
-//      v = Q.pop_front()
-//      for all neighbors u to v:
-//          if u in D
-//               add edge u->v to D
-//          else
-//               add u to D and add edge v->u to D
-//               Q.push_back(u)
-//
-//  return D
-
-function remove_cycle(totalOrder) {
-  var D = {nodes: [], edges: []}; // new_directed graph D
-  var Q = [];
-  var u0 = totalOrder[totalOrder.length - 1];
-  var tags = [];
-  Q.push(u0);
-  while (Q.length !== 0) {
-
-    var u = Q.pop(); // pop front
-
-    console.log("u", nodes[u]);
-    console.log("seen", tags);
-    console.log("sets", nodes[u].sets);
-    console.log("diff", _.difference(nodes[u].sets, tags));
-    var vs = nbsForward(u, linkedByIndex, nodes, tags);
-
-    var sorted = _.sortBy(vs.map(i => nodes[i]), d => {
-      return d.sets.length;
-
-      // var conn = connectionsIndex(d.index, linkedByIndex, sv.map(i => nodes[i]));
-      // return 100 * conn / d.sets.length;
-    }).map(d => d.index).reverse();
-
-    console.log("vs", sorted.map(u => nodes[u].__key__));
-
-    // console.log("sorted", sorted.map(i => nodes[i]));
-
-    sorted.forEach(v => {
-      if (D.nodes.indexOf(v) !== -1) {
-        var filterOut = D.edges.filter(l => l.target === v);
-        // console.log("filterOut", filterOut);
-        D.edges = _.difference(D.edges, filterOut);
-
-        D.edges.push({source: u, target: v});
-      }
-      else {
-        D.nodes.push(v);
-        D.edges.push({source: u, target: v});
-        Q.push(v);
-
-        Q = _.uniq(Q);
-        Q = _.sortBy(Q.map(i => nodes[i]), d => {
-          return d.sets.length;
-        }).map(d => d.index).reverse();
-      }
-    });
-    tags = tags.concat(nodes[u].sets);
-  }
-  return D;
-}
-
-var D = remove_cycle(sv);
-
-console.log("D", D);
-
-
-  // console.log("sv", sv);
-  // while(sv.length !== 0) {
+    // while(sv.length !== 0) {
     // var cur = sv.pop();
     // var neighbors = nbs(cur, linkedByIndex, sv);
     // simpleComps.push([cur].concat(neighbors));
     // hierarchy.push({node: nodes[cur], nbs: neighbors.map(n => nodes[n])});
     // sv = _.difference(sv, neighbors);
 
-    // var cur = sv.pop();
-    // var curNode = nodes[cur];
-    // induceNbs(curNode);
-    // hierarchy.push(curNode);
-    // console.log("nodes[cur]", nodes[cur]);
-    // sv = [];
-    // var neighbors = [];
-    // var nbObjs = neighbors.map(i => nodes[i]);
-    // console.log("seen", seen);
-    // console.log("sv", sv);
-    // sv = _.difference(sv, seen);
-    // hierarchy.push({node: nodes[cur], nbs: nbObjs});
-    // console.log("result", result);
-    // sv = [];
+  // var cur = sv.pop();
+  // var curNode = nodes[cur];
+  // induceNbs(curNode);
+  // hierarchy.push(curNode);
+  // console.log("nodes[cur]", nodes[cur]);
+  // sv = [];
+  // var neighbors = [];
+  // var nbObjs = neighbors.map(i => nodes[i]);
+  // console.log("seen", seen);
+  // console.log("sv", sv);
+  // sv = _.difference(sv, seen);
+  // hierarchy.push({node: nodes[cur], nbs: nbObjs});
+  // console.log("result", result);
+  // sv = [];
 
-    // console.log("cur", nodes[cur]);
-    // console.log("nbs", neighbors);
-    // console.log("sv", sv);
+  // console.log("cur", nodes[cur]);
+  // console.log("nbs", neighbors);
+  // console.log("sv", sv);
   // }
   // console.log("simpleComps", simpleComps);
   // console.log("hierarchy", hierarchy);
@@ -523,10 +647,10 @@ console.log("D", D);
 
   // console.log("biconnected components", biCompNodes);
 
-  this._sets = nodes;
-  this._fociLinks = D.edges;
+  // this._sets = G.nodes;
+  // this._fociLinks = G.edges;
 
-  return this;
+  // return this;
 }
 
 function charge(func) {
@@ -567,7 +691,7 @@ function gravity(gr) {
 }
 
 
-function hasConnections(a) {
+function connections(a) {
   var connections = 0;
   for (var property in this._linkedByIndex) {
     var s = property.split(",");
@@ -577,6 +701,14 @@ function hasConnections(a) {
   return connections;
 }
 
+function hasConnections(a) {
+  for (var property in this._linkedByIndex) {
+    var s = property.split(",");
+    if ((s[0] == a.index || s[1] == a.index) && this._linkedByIndex[property])
+      return true;
+  }
+  return false;
+}
 
 // function nbsIndex(a, linkedByIndex) {
 //   var nbs = 0;
@@ -590,6 +722,32 @@ function hasConnections(a) {
 // }
 
 
+
+function neighbors(a, linkedByIndex, nodes) {
+  var nb;
+  var nbs = [];
+
+  // console.log("a", a);
+  for (var property in linkedByIndex) {
+    var s = property.split(",").map(d => parseInt(d));
+    if (s[0] === a.index) {
+      // console.log("s[1]", s[1]);
+      nb = nodes[s[1]];
+      // console.log("nb", nb);
+      nbs.push(nb);
+    }
+    // else {
+    //   if (s[1] === a.index) {
+    //     console.log("s[0]", s[0]);
+    //     nb = nodes[s[0]];
+    //     console.log("nb", nb);
+    //     nbs.push(nb);
+    //   }
+    // }
+  }
+  return nbs;
+}
+
 // TODO: rename
 function connectionsIndex(a, linkedByIndex, nodes) {
   var connections = 0;
@@ -600,12 +758,11 @@ function connectionsIndex(a, linkedByIndex, nodes) {
       nb = nodes[s[1]];
       // console.log("nb", nb);
       connections += nb.nodes.length;
-    }
-    else {
+    } else {
       if (s[1] === a && nodes[s[0]]) {
         nb = nodes[s[0]];
         // console.log("nb", nb);
-        connections+= nb.nodes.length;
+        connections += nb.nodes.length;
       }
 
     }
@@ -616,7 +773,7 @@ function connectionsIndex(a, linkedByIndex, nodes) {
 
 
 
-function nbsForward(a, linkedByIndex, nodes, seen) {
+function nbsByTag(a, linkedByIndex, nodes, seen) {
   var nbs = [];
   for (var property in linkedByIndex) {
     var s = property.split(",").map(d => parseInt(d));
@@ -624,72 +781,77 @@ function nbsForward(a, linkedByIndex, nodes, seen) {
     var target = nodes[s[1]];
     var diff, interset;
 
-    if (s[0] === a ) {
+    if (s[0] === a) {
       diff = _.difference(source.sets, seen);
       interset = _.intersection(diff, target.sets);
-      if(interset.length > 0)
+      if (interset.length > 0)
         nbs.push(s[1]);
     }
-    else {
-      if (s[1] === a) {
-        diff = _.difference(target.sets, seen);
-        interset = _.intersection(diff, source.sets);
-        if(interset.length > 0)
-        nbs.push(s[0]);
-      }
-    }
+    // else {
+    //   if (s[1] === a) {
+    //     diff = _.difference(target.sets, seen);
+    //     interset = _.intersection(diff, source.sets);
+    //     if(interset.length > 0)
+    //     nbs.push(s[0]);
+    //   }
+    // }
   }
   return _.uniq(nbs);
 }
 
-function neighbors(a, linkedByIndex, nodes) {
-  var nbs = [];
-  for (var property in linkedByIndex) {
-    var s = property.split(",").map(d => parseInt(d));
-    if (s[0] === a && nodes.indexOf(s[1]) !== -1) {
-      nbs.push(s[1]);
-    }
-    else {
-      if (s[1] === a && nodes.indexOf(s[0]) !== -1) {
-        nbs.push(s[0]);
-      }
-    }
-  }
-  return _.uniq(nbs);
-}
+// function neighbors(a, linkedByIndex, nodes) {
+//   var nbs = [];
+//   for (var property in linkedByIndex) {
+//     var s = property.split(",").map(d => parseInt(d));
+//     if (s[0] === a && nodes.indexOf(s[1]) !== -1) {
+//       nbs.push(nodes[s[1]]);
+//     }
+//     else {
+//       if (s[1] === a && nodes.indexOf(s[0]) !== -1) {
+//         nbs.push(nodes[s[0]]);
+//       }
+//     }
+//   }
+//   return nbs;
+// }
 
-const d3Foci = function(){
+const d3Foci = function() {
   return {
-    _sets:         null,
-    _data:         null,
-    _charge:       () => -30,
-    _size:         [1, 1],
-    _fociLinks:    null,
-    _nodeLinks:    null,
+    _sets: null,
+    _data: null,
+    _charge: () => -30,
+    _size: [1, 1],
+    _fociLinks: null,
+    _nodeLinks: null,
     _linkDistance: 20,
     _linkStrength: 0.1,
-    _gravity:      0.1,
-    _clusterSize:  d => d,
+    _gravity: 0.1,
+    _clusterSize: d => d,
 
-    _orientation:  Math.PI / 2,
-    _normalize:    true,
-    _padding:      0,
+    _orientation: Math.PI / 2,
+    _normalize: true,
+    _padding: 0,
 
-    linkDistance:  linkDistance,
-    linkStrength:  linkStrength,
-    charge:        charge,
-    size:          size,
-    data:          getData,
-    clusterSize:   clusterSize,
-    sets:          extractSets,
-    gravity:       gravity,
-    startForce:    startForce,
-    links     :    links,
+    linkDistance: linkDistance,
+    linkStrength: linkStrength,
+    charge: charge,
+    size: size,
+    data: getData,
+    clusterSize: clusterSize,
+    sets: initSets,
+    gravity: gravity,
+    start: start,
+    links: links,
+    groups: groups,
 
+    connections: connections,
     hasConnections: hasConnections
   };
 };
 
-export default function() {
+export
+default
+
+function() {
   return new d3Foci;
 }
