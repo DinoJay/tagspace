@@ -3,8 +3,8 @@ import d3 from "d3";
 
 var color = d3.scale.category20();
 
-var cell_size = 14;
-var isolevel = 0.0009;
+var cell_size = 10;
+var isolevel = 0.0017;
 var epsilon = 0.00000001;
 var grid = {
   width: 1200,
@@ -72,13 +72,13 @@ function get_grid_cell(x, y) {
       {x: x, y: y},
       {x: x+cell_size, y: y},
       {x: x+cell_size, y: y+cell_size},
-      {x: x, y: y+cell_size},
+      {x: x, y: y+cell_size}
     ],
     val: [
       threshold(x, y),
       threshold(x+cell_size, y),
       threshold(x+cell_size, y+cell_size),
-      threshold(x, y+cell_size),
+      threshold(x, y+cell_size)
     ],
     status:false
   };
@@ -164,7 +164,7 @@ function draw_marching_squares(svg, groups) {
 
   groups.forEach(g => {
 
-    set = g.values; //graph.nodes.filter(function(x){return x.group==g;});
+    set = g.nodes; //graph.nodes.filter(function(x){return x.group==g;});
 
     bubblePoints = [];
     var tetriscells = [];
@@ -281,29 +281,42 @@ function draw_marching_squares(svg, groups) {
            .y(function(d) { return d.y; });
 
     // if(typeof prevArrayOfArraysLength[parseInt(g.key] != 'undefined'){
-       for(var i = 0 ; i < prevArrayOfArraysLength[g.key]; i++){
-           svg.selectAll(".bubble"+g.key+i).remove();
-       }
+       // for(var i = 0 ; i < prevArrayOfArraysLength[g.key]; i++){
+       //     svg.selectAll(".bubble"+g.key+i).remove();
+       // }
     // }
 
-     for(var i = 0 ; i < arrayOfArrays.length; i++){
-         var points = arrayOfArrays[i];
-         svg.selectAll(".bubble"+g.key+i).remove();
-         var cardinalPath = svg
-                     .selectAll(".bubble"+g.key+i)
-                      .data([points])
-                      .enter()
-                      .append("path")
-                        .attr("class", "bubble"+g.key+i)
-                        .attr("d", function(d){ return curve(d); })
-                         .attr("fill",function(d) { return color(g.key); })
-                         .attr("stroke-linejoin", "round")
-                         .attr("opacity",groupFillOpacity);
-     }
+     // for(var i = 0 ; i < arrayOfArrays.length; i++){
+         // var points = arrayOfArrays[i];
+         svg.selectAll(".bubble-"+g.key).remove();
+
+         svg.select(".bubble-cont")
+           .selectAll(".bubble-"+g.key)
+            .data(arrayOfArrays)
+            .enter()
+            .append("g")
+            .attr("class", "bubble-"+g.key)
+            .insert("path", ":first-child")
+              .attr("id", (d, i) => "co" + i)
+              .attr("d", function(d){ return curve(d); })
+               .attr("fill", () => color(g.key))
+               // .attr("stroke", "black")
+               // .attr("stroke-width", "20px")
+               .attr("stroke-linejoin", "round")
+               .attr("opacity", groupFillOpacity);
+
+          svg.select(".bubble-cont")
+              .selectAll("g")
+              .append("text")
+              // .attr("id", "curve-text")
+            .append("textPath")
+              .attr("xlink:href", (d, i) => "#co" + i)
+              .text("We go up, then we go down, then up again.");
+            // .append("path")
+     // }
 
 
     prevArrayOfArraysLength[g.key] = arrayOfArrays.length;
-    console.log("loop");
   }); // g
 
   return groupedPoints;

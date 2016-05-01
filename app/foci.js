@@ -1,6 +1,8 @@
 import d3 from "d3";
 import _ from "lodash";
-import cola from "webcola";
+// import cola from "webcola";
+import d3_force from "d3-force";
+import d3_hierarchy from "d3-hierarchy";
 
 var convert_edgelist_to_adjlist = function(vertices, edgelist) {
   var adjlist = {};
@@ -146,6 +148,7 @@ function groups(nodes) {
   });
 
   console.log("groups.length", groups.length);
+  this._groups = groups;
 
   return groups;
 }
@@ -153,10 +156,6 @@ function groups(nodes) {
 
 function start() {
 
-  var linkedByIndex = {};
-  this.links().forEach(function(d) {
-    linkedByIndex[d.source + "," + d.target] = true;
-  });
 
   function hierarchy(cur, nodes, linkedByIndex) {
     cur.children = neighbors(cur, linkedByIndex, nodes);
@@ -171,54 +170,64 @@ function start() {
   }
 
   function runForce(nodes, that) {
+        // .on("tick", ticked);
+
+    var center = that._size.map(d => d/2);
+
+    var simulation = d3_force.forceSimulation(nodes)
+      .force("charge", d3_force.forceManyBody()
+                               .strength(-100)
+                               .distanceMin(-30)
+      )
+      .force("link", d3_force.forceLink()
+                             .distance(80)
+                             .iterations(1))
+      // .force("position", d3_force.forcePosition());
+      .force("center", d3_force.forceCenter(...center));
 
 
-    var force = d3.layout.force()
-      .charge(d => that._charge(d)) // * d.size)
-      .size(that.size())
-      .gravity(that._gravity)
-      .linkStrength(that._linkStrength)
 
-      .linkDistance(d => that._linkDistance(d));
-
+    // var force = d3.layout.force()
+    //   .charge(d => that._charge(d)) // * d.size)
+    //   .size(that.size())
+    //   .gravity(that._gravity)
+    //   .linkStrength(that._linkStrength)
+    //   .linkDistance(d => that._linkDistance(d));
 
     nodes.forEach(d => {
-      d.width = 11 * 2;
-      d.height = 20 * 2;
+      d.width = 11;
+      d.height = 20;
     });
 
-
-    var colaForce = cola.d3adaptor()
-      // .flowLayout("y", 12)
-      .handleDisconnected(true)
-      .avoidOverlaps(true)
-      .size(that.size());
-      // .jaccardLinkLengths(40, 0.7);
-
-    colaForce
-      .nodes(nodes)
-      .links(links)
-      .linkDistance(l => {
-        return l.source.nodes ? l.source.nodes.length * 10 : 20;
-        // return 40;
-      });
+    // var colaForce = cola.d3adaptor()
+    //   // .flowLayout("y", 12)
+    //   .handleDisconnected(true)
+    //   .avoidOverlaps(true)
+    //   .size(that.size());
+    //   // .jaccardLinkLengths(40, 0.7);
+    //
+    // colaForce
+    //   .nodes(nodes)
+    //   .links(links)
+    //   .linkDistance(l => {
+    //     return l.source.nodes ? l.source.nodes.length * 10 : 20;
+    //     // return 40;
+    //   });
       // .groups(gs);
       //
 
-    // colaForce
-    //   .start(20, 0, 10);
 
-    // force.nodes(nodes);
-    // console.log("links", links);
-    force.nodes(nodes);
-    force.links(links);
+      simulation.nodes(nodes);
+      simulation.force("link").links(links);
+      // .on("tick", ticked);
+      simulation.stop();
 
-    var n = 300;
-    force.start();
-    for (var i = n * n; i > 0; --i) force.tick();
-    force.stop();
+    for (var i = 0, n = Math.ceil(Math.log(simulation.alphaMin()) /
+      -simulation.alphaDecay()); i < n; ++i) {
+      simulation.tick();
+    }
 
-    var gs = that.groups(force.nodes());
+    var gs = that.groups(nodes);
     that._groups = gs;
 
     console.log("GS", gs);
@@ -239,7 +248,7 @@ function start() {
         // // e.center.z = i;
         // e.dx = d.dx;
         // e.dy = d.dy;
-      });
+        });
     });
     return nodes;
   }
@@ -250,7 +259,17 @@ function start() {
   //     .projection(function(d) { return [d.y, d.x / 180 * Math.PI]; });
 
 
-  function runTree() {
+  function runTree(nodes, that) {
+
+    var links = that.links();
+    var linkedByIndex = {};
+
+    // var center = that._size.map(d => d/2);
+    console.log("size", that._size);
+    var pack = d3_hierarchy.pack()
+        .size(that._size)
+        // .radius(d => d.data.nodes.length * 32)
+        .padding(0);
 
     var root = {
       index:     nodes.length,
@@ -272,26 +291,40 @@ function start() {
 
     nodes.push(root);
 
+    links.forEach(function(d) {
+      linkedByIndex[d.source + "," + d.target] = true;
+    });
 
-    var diameter = 960;
+    var linkObjs = links.map(l => {
+      l.source = nodes[l.source];
+      l.target = nodes[l.target];
+    });
 
-    var tree = d3.layout.tree()
-        .size([360, diameter / 2 - 120])
-        .separation(function(a, b) { return (a.parent == b.parent ? 1 : 2) / a.depth; });
+    hierarchy(root, nodes, linkedByIndex);
+    var rootNode = d3_hierarchy.hierarchy(root);
+    rootNode
+      .sum((d) => d.nodes.length * 3);
 
-    var treed = tree.nodes(root);
+    rootNode.sort((a, b) => a.nodes.length - b.nodes.length);
 
+    pack(rootNode);
+    var packed = rootNode.descendants();
 
-    // var packed = pack(root);
-    // // //
-    treed.forEach(d => {
-      d.center = {
-        x: d.x,
-        y: d.y
+    packed.forEach(d => {
+      // console.log("pack d", d.x, d.y);
+      d.data.center = {
+        x: _.clone(d.x),
+        y: _.clone(d.y)
       };
     });
 
-    return treed;
+    console.log("packed", packed.map(d => d.data));
+
+    that._links = linkObjs;
+    var gs = that.groups(packed.map(d => d.data));
+    that._groups = gs;
+
+    return packed.map(d => d.data);
   }
 
   var nodes = this.sets();
@@ -299,10 +332,9 @@ function start() {
 
   console.log("NODES", nodes);
 
-  nodes = runForce(nodes, this);
+  nodes = runTree(nodes, this);
 
-  console.log("linkedByIndex", linkedByIndex);
-  // hierarchy(root, nodes, linkedByIndex);
+  // console.log("linkedByIndex", linkedByIndex);
 
   //
   // console.log("treed", treed);

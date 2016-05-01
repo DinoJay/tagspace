@@ -2,15 +2,86 @@ import d3 from "d3";
 import _ from "lodash";
 import fociLayout from "./foci";
 import marching_squares from "./marchingSquaresHelpers";
-import miserables from "./miserables";
 
+import d3_force from "d3-force";
 
 require("./style/style.less");
 
-// for (var i = n * n; i > 0; --i) f.tick();
-// f.stop();
+function simple_comp(nodes, links) {
+  var groups = [];
+  var visited = {};
+  var v;
+
+  // this should look like:
+  // {
+  //   "a2": ["a5"],
+  //   "a3": ["a6"],
+  //   "a4": ["a5"],
+  //   "a5": ["a2", "a4"],
+  //   "a6": ["a3"],
+  //   "a7": ["a9"],
+  //   "a9": ["a7"]
+  // }
+
+  var vertices = nodes.map(d => d.index);
+  var edgeList = links.map(l => {
+    var edge = [l.source.index, l.target.index];
+    return edge;
+  });
+  console.log("edgeList", edgeList);
+
+  var adjlist = convert_edgelist_to_adjlist(vertices, edgeList);
+
+  for (v in adjlist) {
+    if (adjlist.hasOwnProperty(v) && !visited[v]) {
+      var indices = bfs(v, adjlist, visited);
+      groups.push(indices.map(i => nodes[i]));
+    }
+  }
+  return groups;
+}
+
+function collide(node, padding, energy) {
+    return function(quad) {
+      var updated = false;
+      if (quad.point && (quad.point !== node)) {
+        var x = node.x - quad.point.x,
+                y = node.y - quad.point.y,
+                xSpacing = (quad.point.width + node.width + padding) / 2,
+                ySpacing = (quad.point.height + node.height + padding) / 2,
+                absX = Math.abs(x),
+                absY = Math.abs(y),
+                l,
+                lx,
+                ly;
 
 
+        if (absX < xSpacing && absY < ySpacing) {
+            l = Math.sqrt(x * x + y * y) * energy;
+
+            lx = (absX - xSpacing) / l;
+            ly = (absY - ySpacing) / l;
+            // console.log("lx", lx, "ly", ly);
+
+            // the one that"s barely within the bounds probably triggered the collision
+            if (Math.abs(lx) > Math.abs(ly)) {
+                    lx = 0;
+            } else {
+                    ly = 0;
+            }
+
+            node.x -= x *= lx;
+            node.y -= y *= ly;
+            quad.point.x += x;
+            quad.point.y += y;
+
+
+            updated = true;
+        }
+      }
+      return updated;
+    };
+}
 
 function nbsDirected(a, linkedByIndex) {
   var nbs = [];
@@ -28,9 +99,20 @@ function nbsDirected(a, linkedByIndex) {
   return _.uniq(nbs);
 }
 
-function biconnectedComponents(graph){
+function biconnectedComponents(nodes, links){
 
-  var n = Object.keys(graph).length; // number vertices
+  var vertices = nodes.map(d => d.index);
+  var edgeList = links.map(l => {
+    var edge = [l.source.index, l.target.index];
+    return edge;
+  });
+
+  var adjList = convert_edgelist_to_adjlist(vertices, edgeList);
+  console.log("edgelist", edgeList);
+  console.log("adjList", adjList);
+
+  var n = Object.keys(adjList).length; // number vertices
+  console.log("n", n);
   var result = [];
   // var m = 10; // number edges
 
@@ -43,7 +125,6 @@ function biconnectedComponents(graph){
 
   for(var u=0; u<n; u++){
     if(!visited[u]){
-      // console.log("u", u);
       dfsVisit(u);
     }
   }
@@ -53,8 +134,8 @@ function biconnectedComponents(graph){
   function dfsVisit(u){
     visited[u] = true;
     d[u] = low[u] = count++;
-    // console.log("graph u", graph[u]);
-    graph[u].forEach(e =>{
+    console.log("graph u", u, nodes[u]);
+    adjList[u].forEach(e =>{
       var min = Math.min(u, e);
       var max = Math.max(u, e);
       var v = u === min ? max : min;
@@ -98,10 +179,7 @@ function outputComp(u, v){
   }
 }
 
-
-var diameter = 960;
-
-function collide(data, alpha, padding) {
+function collideCircle(data, alpha, padding) {
   var quadtree = d3.geom.quadtree(data);
   return function(d) {
       var r = d.r + padding,
@@ -189,7 +267,7 @@ var bfs = function(v, adjlist, visited) {
   visited[v] = true;
   while (q.length > 0) {
     v = q.shift();
-    current_group.push(v);
+    current_group.push(parseInt(v));
     // Go through adjacency list of vertex v, and push any unvisited
     // vertex onto the queue.
     // This is more efficient than our earlier approach of going
@@ -255,6 +333,7 @@ d3.json("data.json", function(error, data) {
   // console.log("rawData", rawData);
   // const { data: data, edges: edges } = prepareData(rawData.documents);
   // console.log("tagData", data);
+  //d
   data.documents.forEach(d => d.r = 12);
 
   var zoom = d3.behavior.zoom()
@@ -271,6 +350,9 @@ d3.json("data.json", function(error, data) {
               // .append("g")
               // .attr("transform", "translate(" + [75, 75] + ")")
               // .call(zoom);
+
+  svg.append("g")
+     .attr("class", "bubble-cont");
 
   var foci = fociLayout()
                 .gravity(0.01)
@@ -289,16 +371,48 @@ d3.json("data.json", function(error, data) {
                 })
                 .start();
 
-  var nodes = foci.data();
+  var nodes = _.flatten(foci.data().map(d => {
+    return d.nodes.map(e => {
+      e.center = {x: d.center.x, y: d.center.y};
+      // e.x = d.x;
+      // e.y = d.y;
+      e.width = 10 * 2;
+      e.height = 16 * 2;
+      return e;
+    });
+  }));
 
-  console.log("force nodes", nodes);
-  // console.log("foci data", nodes);
+  var groupsById =  foci.groups().map(g => {
+    g.ids = _.flatten(g.values.map(sg => sg.nodes.map(n => n.id)));
+    return g;
+  });
 
-  var force = d3.layout.force()
-                .nodes(nodes)
-                .size([800, 500])
-                .charge(0)
-                .linkStrength(0)
+  console.log("groupsById", groupsById);
+
+  groupsById.forEach(g => {
+    g.nodes = g.ids.map(id => {
+      var n = nodes.find(n => n.id === id);
+      return n;
+    });
+    return g;
+  });
+
+  console.log("foci data", foci.data(), foci.data().length);
+  console.log("foci links", foci.links());
+  console.log("force nodes", nodes, "length", nodes.length);
+  console.log("foci-groups", foci.groups());
+
+
+    // .force("charge", d3_force.forceManyBody().strength(- 100))
+    // .force("link", d3_force.forceLink().distance(100))
+    // .force("position", d3_force.forcePosition());
+    // .force("center", d3_force.forceCenter(600, 400));
+
+  // var force = d3.layout.force()
+  //               .nodes(nodes)
+  //               .size([1200, 800])
+  //               .charge(0)
+  //               .linkStrength(0)
                 // .linkDistance(l => {
                 //   var conn1 = hasConnections(l.source);
                 //   var conn2 = hasConnections(l.target);
@@ -306,63 +420,43 @@ d3.json("data.json", function(error, data) {
                 //   return conn > 0 ? 20000 / conn : 2000;
                 // })
                 // .chargeDistance(200)
-                .gravity(0)
+                // .gravity(0)
                 // .friction(0.4)
-                .theta(1);
+                // .theta(1);
   //
   // console.log("clusteredDocs", force.nodes());
   // // console.log("fociLinks", foci.links());
   //
   // console.log("fociLinks", foci.links());
   // var forceEdges = [];
-  // TODO:
-  // var forceEdges = _.flattenDeep(foci.links().map(l => {
-  //   return l.source.nodes.map(s => {
-  //     return l.target.nodes.map(t => {
-  //       return {
-  //         source: force.nodes().findIndex(d => d.__setKey__ === s.__setKey__),
-  //         target: force.nodes().findIndex(d => d.__setKey__ === t.__setKey__)
-  //         // intersec: l.intersec
-  //       };
-  //     });
-  //   });
-  // }));
 
+  var simulation = d3_force.forceSimulation(nodes)
+      .force("x", d3_force.forceX(d => d.center.x).strength(1))
+      .force("y", d3_force.forceY(d => d.center.y).strength(1));
+      // .force("collide", d3_force.forceCollide(12));
 
-  force.start();
-  // var forceEdges = _.flattenDeep(force.nodes().map(n => {
-  //   var links = foci.links()
-  //                   .filter(l => n.__setKey__ === l.source.__key__ || n.__setKey__ === l.target.__key__)
-  //                   .map(l => {
-  //                     return {
-  //                       source: force.nodes().find(n => n.__setKey__ === l.source.__key__).index,
-  //                       target: force.nodes().find(n => n.__setKey__ === l.target.__key__).index
-  //                     };
-  //                   });
-  //   return links;
-  // }));
+  // simulation.stop();
   //
-  // console.log("forceEdges before", forceEdges);
-  // force.links(forceEdges.slice(0)); //
-  // console.log("forceEdges", force.links());
+  //   for (var i = 0, n = Math.ceil(Math.log(simulation.alphaMin()) /
+  //     -simulation.alphaDecay()); i < n; ++i) {
+  //     simulation.tick();
+  //   }
 
-  // console.log("forceEdges", forceEdges);
-  // var edgeList = forceEdges.map(l => [l.source, l.target]);
-  // // var linkedByIndex = {};
-  // // forceEdges.forEach(function(d) {
-  // //   linkedByIndex[d.source + "," + d.target] = true;
-  // // });
-  // //
-  // // function hasConnections(a) {
-  // //   var connections = 0;
-  // //   for (var property in linkedByIndex) {
-  // //     var s = property.split(",");
-  // //     if ((s[0] == a.index || s[1] == a.index) && linkedByIndex[property])
-  // //       connections++;
-  // //   }
-  // //   return connections;
-  // // }
-  //
+  var forceEdges = _.flattenDeep(foci.links().map(l => {
+    return l.source.nodes.map(s => {
+      return l.target.nodes.map(t => {
+        return {
+          source: nodes.find(d => d.__setKey__ === s.__setKey__),
+          target: nodes.find(d => d.__setKey__ === t.__setKey__)
+          // intersec: l.intersec
+        };
+      });
+    });
+  }));
+
+
+  console.log("forceEdges", forceEdges);
+
   //
   // // this should look like:
   // // {
@@ -375,11 +469,12 @@ d3.json("data.json", function(error, data) {
   // //   "a9": ["a7"]
   // // }
   // // console.log("edgeList", edgeList);
-  // var vertices = force.nodes().map((_, i) => i);
-  // var adjList = convert_edgelist_to_adjlist(vertices, edgeList);
-  // // console.log("adjList", adjList);
   //
-  // var comps = biconnectedComponents(adjList);
+  // var comps = biconnectedComponents(foci.data(), foci.links());
+  // console.log("biconnectedComponents", comps);
+  // var gr = simple_comp(foci.data(), foci.links());
+  // console.log("gr", gr);
+
   //
   // var cut_vertices = _.uniq(_.flatten(comps.map(c => {
   //   return c.filter(u => {
@@ -449,54 +544,64 @@ d3.json("data.json", function(error, data) {
   //     .attr("stroke-width", "2")
   //     .attr("fill", "orange");
 
+
   var doc = svg.selectAll(".doc")
-    .data(nodes, d => d.__key__);
+    .data(nodes, d => d.id);
 
   doc
     .enter()
     .append("rect")
+      // .attr("transform", d => "translate(" + (-d.width / 2) + "," + (-d.height/ 2) + ")")
       .attr("class", "doc")
       .attr("width", d => d.width)
       .attr("height", d => d.height)
-      .attr("rx", 5)
-      .attr("ry", 5)
+      .attr("rx", 2)
+      .attr("ry", 2)
       .attr("stroke", "black")
       .attr("stroke-width", "2")
       .attr("fill", "white")
       .append("title")
-        .text(function(d) { return d.__key__; });
+        .text(function(d) { return d.title; });
 
-  var link = svg.selectAll(".link")
-               .data(foci.links());
-
-  // build the arrow.
-  svg.append("svg:defs").selectAll("marker")
-      .data(["end"])      // Different link/path types can be defined here
-    .enter().append("svg:marker")    // This section adds in the arrows
-      .attr("id", String)
-      .attr("viewBox", "0 -5 10 10")
-      .attr("refX", 15)
-      .attr("refY", -1.5)
-      .attr("markerWidth", 6)
-      .attr("markerHeight", 6)
-      .attr("orient", "auto")
-    .append("svg:path")
-      .attr("d", "M0,-5L10,0L0,5");
-
-  link.enter().insert("line", ":first-child")
-               //    .attr("class", function(d) { return "link " + d.type; })
-               .attr("class", "link")
-               .attr("marker-end", "url(#end)");
-
-
+  // var link = svg.selectAll(".link")
+  //              .data(foci.links());
+  //
+  // // build the arrow.
+  // svg.append("svg:defs").selectAll("marker")
+  //     .data(["end"])      // Different link/path types can be defined here
+  //   .enter().append("svg:marker")    // This section adds in the arrows
+  //     .attr("id", String)
+  //     .attr("viewBox", "0 -5 10 10")
+  //     .attr("refX", 15)
+  //     .attr("refY", -1.5)
+  //     .attr("markerWidth", 6)
+  //     .attr("markerHeight", 6)
+  //     .attr("orient", "auto")
+  //   .append("svg:path")
+  //     .attr("d", "M0,-5L10,0L0,5");
+  //
+  // link.enter().insert("line", ":first-child")
+  //              //    .attr("class", function(d) { return "link " + d.type; })
+  //              .attr("class", "link")
+  //              .attr("marker-end", "url(#end)");
 
 
 
-  force.on("tick", function(e) {
 
-    doc.each(d => {
-      moveToPos(d, {x: d.center.x, y: d.center.y}, e.alpha * 2);
-    }); // doc.each((collide(doc.data(), e.alpha, 0)));
+
+  simulation.on("tick", function(e) {
+
+    // doc.each(d => {
+    //   moveToPos(d, {x: d.center.x, y: d.center.y}, e.alpha );
+    // });
+    //
+    // var q2 = d3.geom.quadtree(doc.data());
+    // doc.each(d => {
+    //   q2.visit(collide(d, 0, 1));
+    //   // boundPanel(d, panels.center, 1);
+    // });
+
+    // doc.each((collide(doc.data(), e.alpha, 10)));
     //
     // svg.selectAll("path.group")
     //   .data(foci.groups())
@@ -524,22 +629,22 @@ d3.json("data.json", function(error, data) {
     //     .style("stroke-linejoin", "round")
     //     .style("opacity", 0.2)
     //     .attr("d", groupPath);
-    link
-      .attr("x1", d => d.source.x)
-      .attr("y1", d => d.source.y)
-      .attr("x2", d => d.target.x)
-      .attr("y2", d => d.target.y);
+    // link
+    //   .attr("x1", d => d.source.x)
+    //   .attr("y1", d => d.source.y)
+    //   .attr("x2", d => d.target.x)
+    //   .attr("y2", d => d.target.y);
 
-    // doc.attr("transform", d => "translate(" + [d.x, d.y] + ")");
+    doc.attr("transform", d => "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")");
 
     // doc.attr("transform", function(d) { return "rotate(" + (d.x - 90) + ")translate(" + d.y + ")"; })
-    doc.attr("x", d => d.x - d.width / 2);
-    doc.attr("y", d => d.y - d.width / 2);
+    // doc.attr("x", d => d.x - d.width / 2 );
+    // doc.attr("y", d => d.y - d.width / 2 );
 
-    marching_squares(svg, foci.groups());
+    marching_squares(svg, groupsById);
   });
 
-  force.start();
+  // force.start();
 
   doc.on("click", d => console.log("d nodes", d.__key__, d.nodes));
 
