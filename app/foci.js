@@ -121,23 +121,25 @@ function moveToCenter(alpha, energy) {
 function groups(nodes) {
   if (!nodes) return this._groups;
 
-  var spread_data = _.flatten(nodes.map(n => {
-      var clones = n.sets.map(t => {
+  var shallowNodes = nodes.filter(d => d.data.shallow);
+  var labelNodes = nodes.filter(d => d.data.label);
+
+  var spread_data = _.flatten(shallowNodes.map(n => {
+      var clones = n.data.sets.map(t => {
         var clone = _.cloneDeep(n);
-        clone.tag = t;
+        clone.data.tag = t;
         return clone;
-      }).filter(d => d.__key__ !== "root");
+      }).filter(d => d.data.__key__ !== "root");
       return clones;
     }));
 
   var nested_data = d3.nest()
-    .key(d => d.tag)
+    .key(d => d.data.tag)
     .entries(spread_data).filter(d => d.values.length > 1);
 
   var uniq_nested_data = _.uniqWith(nested_data, (a, b) => {
-      var aKeys = a.values.map(d => d.__key__);
-      var bKeys = b.values.map(d => d.__key__);
-
+      var aKeys = a.values.map(d => d.data.__key__);
+      var bKeys = b.values.map(d => d.data.__key__);
       return _.isEqual(aKeys, bKeys);
   });
 
@@ -147,7 +149,21 @@ function groups(nodes) {
     return g;
   });
 
-  console.log("groups.length", groups.length);
+  groups.forEach(g => {
+    labelNodes.forEach(l => {
+    var sameParent = g.values.find(v => v.parent.data.__key__ === l.parent.data.__key__);
+    console.log("sameParent", sameParent);
+    if (sameParent) {
+      g.values.push(l);
+    }
+    // d.values = d.values.map(d => d.data);
+    });
+  });
+
+  groups.forEach(d => {
+    d.values = d.values.map(d => d.data);
+  });
+
   this._groups = groups;
 
   return groups;
@@ -156,17 +172,58 @@ function groups(nodes) {
 
 function start() {
 
-
   function hierarchy(cur, nodes, linkedByIndex) {
     cur.children = neighbors(cur, linkedByIndex, nodes);
+
+    if (cur.children.length !== 0) cur.shallow = false;
+    else cur.shallow = true;
+
     cur.value = cur.children.length;
-    console.log("cur", cur);
-    console.log("cur children", cur.children);
+    // console.log("cur", cur);
+    // console.log("cur children", cur.children);
 
     cur.children.forEach(next => {
-      // if(seen.indexOf(next) === -1)
       hierarchy(next, nodes, linkedByIndex);
     });
+  }
+
+  function addShallow(cur) {
+
+    // console.log("cur", cur);
+    // console.log("cur children", cur.children);
+    cur.children.forEach(next => {
+      addShallow(next);
+    });
+
+    if (!cur.shallow) {
+      var copyNode = _.cloneDeep(cur);
+      copyNode.shallow = true;
+      copyNode.children = [];
+
+      var labelNode = _.cloneDeep(cur);
+      labelNode.shallow = false;
+      labelNode.label = true;
+      labelNode.children = [];
+      labelNode.text = labelNode.__key__ + " labelNode";
+      labelNode.__key__ = labelNode.__key__ + " labelNode";
+      labelNode.id = labelNode.__key__ + " labelNode";
+      console.log("__key__", labelNode.__key__);
+      labelNode.nodes = [{
+        id: labelNode.__key__ + " labelNode",
+        "__key__": labelNode.__key__ + " labelNode",
+        "__setKey__": labelNode.__key__ + " labelNode",
+        label: true,
+        // shallow: true,
+        children: [],
+        sets: cur.sets
+      }];
+      // labelNode.nodes = [];
+
+      if (!cur.root) {
+        cur.children.push(copyNode, labelNode);
+      }
+      cur.nodes = [];
+    }
   }
 
   function runForce(nodes, that) {
@@ -236,7 +293,8 @@ function start() {
       // console.log("d", d);
       d.center = {
         x: d.x,
-        y: d.y
+        y: d.y,
+        r: d.r
       };
 
       // TODO: check
@@ -258,7 +316,6 @@ function start() {
   // var diagonal = d3.svg.diagonal.radial()
   //     .projection(function(d) { return [d.y, d.x / 180 * Math.PI]; });
 
-
   function runTree(nodes, that) {
 
     var links = that.links();
@@ -268,16 +325,16 @@ function start() {
     console.log("size", that._size);
     var pack = d3_hierarchy.pack()
         .size(that._size)
-        // .radius(d => d.data.nodes.length * 32)
+        // .radius(d => d.data.label ? 200 : d.data.nodes.length * 5)
         .padding(0);
 
     var root = {
       index:     nodes.length,
       level:     0,
       "__key__": "root",
-      sets     : [],
-      // children: nodes.filter(d => d.level === 0),
-      nodes: []
+      root:      true,
+      sets:      [],
+      nodes:     []
     };
 
     nodes.forEach(d => {
@@ -301,28 +358,53 @@ function start() {
     });
 
     hierarchy(root, nodes, linkedByIndex);
+    addShallow(root);
+
     var rootNode = d3_hierarchy.hierarchy(root);
-    rootNode
-      .sum((d) => d.nodes.length * 3);
 
-    rootNode.sort((a, b) => a.nodes.length - b.nodes.length);
-
+    // TODO: Bug ??
+    rootNode.sum((d) => d.nodes.length > 0 ? d.nodes.length * 3: 50);
+    rootNode.sort((a, b) => a.data.nodes.length - b.data.nodes.length);
     pack(rootNode);
+
     var packed = rootNode.descendants();
 
     packed.forEach(d => {
-      // console.log("pack d", d.x, d.y);
       d.data.center = {
-        x: _.clone(d.x),
-        y: _.clone(d.y)
+        x: d.x,
+        y: d.y,
+        r: d.r
       };
     });
 
-    console.log("packed", packed.map(d => d.data));
+    var packedNodes = packed.map(d => {
+      return d.data;
+    });
+    var shallowNodes = packed.filter(d => {
+      return d.data.shallow;
+    });
+
+    var labelNodes = packed.filter(d => {
+      return d.data.label;
+    });
+
+    // shallowNodes.forEach((d, i) => {
+    //   d.index = i;
+    // });
+
+    console.log("shallow nodes", shallowNodes);
+    console.log("LABEL NODES", labelNodes);
 
     that._links = linkObjs;
-    var gs = that.groups(packed.map(d => d.data));
+    // TODO: buggy
+    var gs = that.groups(packed);
+    console.log("GROUPS", gs);
+    // labelNodes.forEach(l => {
+    //   gs.for
+    // })
     that._groups = gs;
+
+    // console.log("shallow", packed.filter(d => d.shallow));
 
     return packed.map(d => d.data);
   }
@@ -330,40 +412,7 @@ function start() {
   var nodes = this.sets();
   var links = this.links();
 
-  console.log("NODES", nodes);
-
-  nodes = runTree(nodes, this);
-
-  // console.log("linkedByIndex", linkedByIndex);
-
-  //
-  // console.log("treed", treed);
-  // console.log("treed center", treed.filter(d => !d.center.x));
-
-  // console.log("packed", packed.filter(d => !d));
-
-  // var totalSize = values.reduce((a, b) => a.size + b.size);
-  // console.log("SETS", this.sets());
-  // console.log("fociLinks", this._fociLinks.map(d => d.source.__key__ + " - " + d.target.__key__));
-
-  // var packedNodes = packed.filter(d => d.nodes);
-
-  // nodes.forEach(d => {
-  //   d.x = null;
-  //   d.y = null;
-  //   d.px = null;
-  //   d.py = null;
-  // });
-
-  // var edges = pack.links(packedNodes);
-
-  //
-  // run the simulation n times
-
-
-  // var nodes = _.flatten(values.map(d => d.nodes));
-
-  this.data(nodes);
+  this.data(runTree(nodes, this));
 
   return this;
 }

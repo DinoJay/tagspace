@@ -322,12 +322,6 @@ var groupPath = function(d) {
 
 var groupFill = function(d, i) { return fill(i & 3); };
 
-function moveToPos(d, pos, affectSize) {
-  // var affectSize = alpha * energy;
-  d.x = d.x + (pos.x - d.x) * affectSize;
-  d.y = d.y + (pos.y - d.y) * affectSize;
-}
-
 
 d3.json("data.json", function(error, data) {
   // console.log("rawData", rawData);
@@ -373,7 +367,7 @@ d3.json("data.json", function(error, data) {
 
   var nodes = _.flatten(foci.data().map(d => {
     return d.nodes.map(e => {
-      e.center = {x: d.center.x, y: d.center.y};
+      e.center = d.center;
       // e.x = d.x;
       // e.y = d.y;
       e.width = 10 * 2;
@@ -394,6 +388,7 @@ d3.json("data.json", function(error, data) {
       var n = nodes.find(n => n.id === id);
       return n;
     });
+
     return g;
   });
 
@@ -401,34 +396,6 @@ d3.json("data.json", function(error, data) {
   console.log("foci links", foci.links());
   console.log("force nodes", nodes, "length", nodes.length);
   console.log("foci-groups", foci.groups());
-
-
-    // .force("charge", d3_force.forceManyBody().strength(- 100))
-    // .force("link", d3_force.forceLink().distance(100))
-    // .force("position", d3_force.forcePosition());
-    // .force("center", d3_force.forceCenter(600, 400));
-
-  // var force = d3.layout.force()
-  //               .nodes(nodes)
-  //               .size([1200, 800])
-  //               .charge(0)
-  //               .linkStrength(0)
-                // .linkDistance(l => {
-                //   var conn1 = hasConnections(l.source);
-                //   var conn2 = hasConnections(l.target);
-                //   var conn = conn1 > conn2 ? conn1 : conn2;
-                //   return conn > 0 ? 20000 / conn : 2000;
-                // })
-                // .chargeDistance(200)
-                // .gravity(0)
-                // .friction(0.4)
-                // .theta(1);
-  //
-  // console.log("clusteredDocs", force.nodes());
-  // // console.log("fociLinks", foci.links());
-  //
-  // console.log("fociLinks", foci.links());
-  // var forceEdges = [];
 
   var simulation = d3_force.forceSimulation(nodes)
       .force("x", d3_force.forceX(d => d.center.x).strength(1))
@@ -546,7 +513,7 @@ d3.json("data.json", function(error, data) {
 
 
   var doc = svg.selectAll(".doc")
-    .data(nodes, d => d.id);
+    .data(nodes.filter(d => !d.label), d => d.id);
 
   doc
     .enter()
@@ -561,7 +528,26 @@ d3.json("data.json", function(error, data) {
       .attr("stroke-width", "2")
       .attr("fill", "white")
       .append("title")
-        .text(function(d) { return d.title; });
+        .text(function(d) { return d.__setKey__; });
+
+
+  var circle = svg.append("g")
+      .attr("class", "circle-cont")
+      .selectAll("g")
+      .data(foci.data())
+      .enter().append("g")
+        .attr("transform", function(d) {
+          return "translate(" + d.center.x + "," + d.center.y + ")"; })
+        .attr("class", function(d) { return "node" + (!d.children ? " node--leaf" : d.depth ? "" : " node--root"); })
+        .on("click", d => console.log(d));
+
+  circle.append("circle")
+        .attr("id", function(d, i) { return "node-" + i; })
+        .attr("r", function(d) { return d.center.r; })
+        .style("stroke", "black")
+        .attr("fill", "black")
+        .attr("opacity", 0.1)
+        .on("click", d => console.log(d));
 
   // var link = svg.selectAll(".link")
   //              .data(foci.links());
@@ -646,6 +632,5 @@ d3.json("data.json", function(error, data) {
 
   // force.start();
 
-  doc.on("click", d => console.log("d nodes", d.__key__, d.nodes));
-
+  doc.on("click", d => console.log("d nodes", d.__setKey__, d.nodes, "shallow", d.shallow));
 });

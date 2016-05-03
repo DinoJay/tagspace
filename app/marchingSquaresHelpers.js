@@ -4,7 +4,7 @@ import d3 from "d3";
 var color = d3.scale.category20();
 
 var cell_size = 10;
-var isolevel = 0.0017;
+var isolevel = 0.0010;
 var epsilon = 0.00000001;
 var grid = {
   width: 1200,
@@ -288,7 +288,7 @@ function draw_marching_squares(svg, groups) {
 
      // for(var i = 0 ; i < arrayOfArrays.length; i++){
          // var points = arrayOfArrays[i];
-         svg.selectAll(".bubble-"+g.key).remove();
+         svg.select(".bubble-cont").selectAll(".bubble-"+g.key).remove();
 
          svg.select(".bubble-cont")
            .selectAll(".bubble-"+g.key)
@@ -305,14 +305,14 @@ function draw_marching_squares(svg, groups) {
                .attr("stroke-linejoin", "round")
                .attr("opacity", groupFillOpacity);
 
-          svg.select(".bubble-cont")
-              .selectAll("g")
-              .append("text")
-              // .attr("id", "curve-text")
-            .append("textPath")
-              .attr("xlink:href", (d, i) => "#co" + i)
-              .text("We go up, then we go down, then up again.");
-            // .append("path")
+          // svg.select(".bubble-cont")
+          //     .selectAll("g")
+          //     .append("text")
+          //     // .attr("id", "curve-text")
+          //   .append("textPath")
+          //     .attr("xlink:href", (d, i) => "#co" + i)
+          //     .text("We go up, then we go down, then up again.");
+          //   // .append("path")
      // }
 
 
