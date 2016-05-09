@@ -1,11 +1,48 @@
 import d3 from "d3";
 import _ from "lodash";
 import fociLayout from "./foci";
-import marching_squares from "./marchingSquaresHelpers";
-
 import d3_force from "d3-force";
 
+import marching_squares from "./marchingSquaresHelpers.js";
+import offsetInterpolate from "./polyOffset.js";
+// import ClipperLib from "js-clipper";
+
 require("./style/style.less");
+
+var labelLine = d3.svg.line().x(function(d) {
+  return d.x;
+}).y(function(d) {
+  return d.y;
+}).interpolate(offsetInterpolate(50));
+
+var width = 1200;
+var height = 800;
+var margin = {
+  right: 100,
+  left: 100,
+  top: 100,
+  bottom: 100
+};
+
+function boundMargin(node, width, height, margin) {
+  var halfHeight = node.height / 2,
+      halfWidth = node.width / 2;
+
+  if (node.x - halfWidth < margin.left) {
+          node.x = halfWidth + margin.left;
+  }
+  if (node.x + halfWidth > (width - margin.right)) {
+          node.x = (width - margin.right) - halfWidth;
+  }
+
+  if (node.y - halfHeight < margin.top) {
+          node.y = halfHeight + margin.top;
+  }
+  if (node.y + halfHeight > (height - margin.bottom)) {
+          node.y = (height - margin.bottom) - halfHeight;
+  }
+  return node;
+}
 
 function simple_comp(nodes, links) {
   var groups = [];
@@ -38,7 +75,7 @@ function simple_comp(nodes, links) {
       groups.push(indices.map(i => nodes[i]));
     }
   }
-  return groups;
+  return groups.map(g => g.filter(d => d));
 }
 
 function collide(node, padding, energy) {
@@ -46,22 +83,21 @@ function collide(node, padding, energy) {
       var updated = false;
       if (quad.point && (quad.point !== node)) {
         var x = node.x - quad.point.x,
-                y = node.y - quad.point.y,
-                xSpacing = (quad.point.width + node.width + padding) / 2,
-                ySpacing = (quad.point.height + node.height + padding) / 2,
-                absX = Math.abs(x),
-                absY = Math.abs(y),
-                l,
-                lx,
-                ly;
+            y = node.y - quad.point.y,
+            xSpacing = (quad.point.width + node.width + padding) / 2,
+            ySpacing = (quad.point.height + node.height + padding) / 2,
+            absX = Math.abs(x),
+            absY = Math.abs(y),
+            l,
+            lx,
+            ly;
 
-
+        console.log("node", node.width);
         if (absX < xSpacing && absY < ySpacing) {
             l = Math.sqrt(x * x + y * y) * energy;
 
             lx = (absX - xSpacing) / l;
             ly = (absY - ySpacing) / l;
-            // console.log("lx", lx, "ly", ly);
 
             // the one that"s barely within the bounds probably triggered the collision
             if (Math.abs(lx) > Math.abs(ly)) {
@@ -285,6 +321,7 @@ var bfs = function(v, adjlist, visited) {
 };
 
 var groupPath = function(d) {
+  if (d.length < 3) return null;
   // var points = d.map(function(i) { return [i.x, i.y]; });
   // var hull = d3.geom.hull(points);
   // // console.log("ch", ch);
@@ -293,31 +330,42 @@ var groupPath = function(d) {
   // return ch.length > 0 ? "M" + ch.join("L") + "Z" : null;
   // console.log("group", d);
 
-  var fakePoints = [];
-  d.forEach(function(e) {
-    var xOffset = 30;
-    var yOffset = 30;
-    fakePoints = fakePoints.concat([
-      // "0.7071" is the sine and cosine of 45 degree for corner points.
-      [e.x, (e.y + xOffset)],
-      [(e.x + (0.7071 * xOffset)), (e.y + (0.7071 * yOffset))],
-      [(e.x + xOffset), e.y],
-      [(e.x + (0.7071 * xOffset)), (e.y - (0.7071 * yOffset))],
-      [(e.x), (e.y - yOffset)],
-      [(e.x - (0.7071 * xOffset)), (e.y - (0.7071 * yOffset))],
-      [(e.x - xOffset), e.y],
-      [(e.x - (0.7071 * xOffset)), (e.y + (0.7071 * yOffset))]
-      ]);
+  var hull = d3.geom.hull()
+    .x(function(d) {
+    return d.x;
+  }).y(function(d) {
+    return d.y;
   });
 
-  var hull = d3.geom.hull(fakePoints).join("L");
+  // var h = d3.geom.hull(d.map(d => [d.x, d.y])).reverse();
 
-  var ch = d3.geom.delaunay(fakePoints).filter(function(t) {
-    return dsq(t[0],t[1]) < asq && dsq(t[0],t[2]) < asq && dsq(t[1],t[2]) < asq;
-  });
+  // var path = h.map(d => {
+  //   return {X: d[0], Y: d[1]};
+  // });
+  // var co = new ClipperLib.ClipperOffset(2, 0.25);
+  // co.AddPath(path, ClipperLib.JoinType.jtMiter,
+  //   ClipperLib.EndType.etClosedPolygon);
+  // console.log("co", co);
+  // var solution = new ClipperLib.Paths();
+  // co.Execute(solution, 50);
+  //
+  // var skel_hull = solution[0].map(d => [d.X, d.Y]);
+  // console.log("skel_hull", skel_hull);
+
+  // var ch = d3.geom.delaunay(fakePoints).filter(function(t) {
+  //   return dsq(t[0],t[1]) < asq && dsq(t[0],t[2]) < asq && dsq(t[1],t[2]) < asq;
+  // });
+  // var offset = labelLine(hull(d.values.reverse()));
+  // return offset;
 
   // return null;
-  return "M" + hull + "Z";
+  var sorted = _.sortBy(d, e => e.nodes.length);
+  var h = hull(d);
+  var h0 = labelLine(h.reverse());
+  var h1 = "M" + h.map(d => [d.x, d.y]).join("L") + "Z";
+  // var sortedFakePoints = _.sortBy(d, d => d[1]);
+  // return "M" + h0.join("L") + "Z";
+  return h1;
 };
 
 var groupFill = function(d, i) { return fill(i & 3); };
@@ -331,19 +379,21 @@ d3.json("data.json", function(error, data) {
   data.documents.forEach(d => d.r = 12);
 
   var zoom = d3.behavior.zoom()
-               .scaleExtent([1, 10])
+               .size(width, height)
+               .scaleExtent([-10, 20])
                .on("zoom", () => {
                   svg.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
                 });
 
   var svg = d3.select("body").append("svg")
-              .attr("width", 1200)
-              .attr("height", 800);
-              // .append("g")
-                  // .attr("transform", "translate(" + diameter / 2 + "," + diameter / 2 + ")");
-              // .append("g")
-              // .attr("transform", "translate(" + [75, 75] + ")")
-              // .call(zoom);
+              .attr("width", width)
+              .attr("height", height)
+              .append("g")
+              .attr("transform", "translate(" + [0, 0] + ")")
+              .call(zoom)
+              .append("g");
+
+  // svg.attr("transform", "scale(0.5)");
 
   svg.append("g")
      .attr("class", "bubble-cont");
@@ -351,33 +401,36 @@ d3.json("data.json", function(error, data) {
   var foci = fociLayout()
                 .gravity(0.01)
                 .sets(data.documents)
-                .size([1200, 800])
+                .size([width, height])
                 .charge(function(d) {
                   // var conn = this.hasConnections(d);
                   // return conn > 0 ? -100 / conn : -100;
                   // return - d.nodes.length * 40;
-                  return -60;
+                  return -40;
                 })
-                // .linkStrength(1)
+                .linkStrength(l => l.target.label ? 0: 0)
                 .linkDistance(function(l){
                   // var conn = this.connections(l.source);
-                  return 30;
+                  return 15;
                 })
                 .start();
 
   var nodes = _.flatten(foci.data().map(d => {
+    // TODO
+    if (d.label) return d;
+
     return d.nodes.map(e => {
       e.center = d.center;
       // e.x = d.x;
       // e.y = d.y;
-      e.width = 10 * 2;
-      e.height = 16 * 2;
+      e.width = 5;
+      e.height = 8;
       return e;
     });
   }));
 
   var groupsById =  foci.groups().map(g => {
-    g.ids = _.flatten(g.values.map(sg => sg.nodes.map(n => n.id)));
+    g.ids = _.flatten(g.values.map(sn => sn.nodes ? sn.nodes.map(n => n.id) : sn.id ));
     return g;
   });
 
@@ -399,8 +452,16 @@ d3.json("data.json", function(error, data) {
 
   var simulation = d3_force.forceSimulation(nodes)
       .force("x", d3_force.forceX(d => d.center.x).strength(1))
-      .force("y", d3_force.forceY(d => d.center.y).strength(1));
-      // .force("collide", d3_force.forceCollide(12));
+      .force("y", d3_force.forceY(d => d.center.y).strength(1))
+      .force("charge", d3_force.forceManyBody()
+                               .theta(2)
+                               .strength(-40)
+                               // .distanceMin(-100)
+      );
+      // .force("collide", (alpha) => {
+      //   label.each((collideCircle(label.data(), alpha, 100)));
+      // });
+      // .force("collide", d3_force.forceCollide(39));
 
   // simulation.stop();
   //
@@ -409,20 +470,20 @@ d3.json("data.json", function(error, data) {
   //     simulation.tick();
   //   }
 
-  var forceEdges = _.flattenDeep(foci.links().map(l => {
-    return l.source.nodes.map(s => {
-      return l.target.nodes.map(t => {
-        return {
-          source: nodes.find(d => d.__setKey__ === s.__setKey__),
-          target: nodes.find(d => d.__setKey__ === t.__setKey__)
-          // intersec: l.intersec
-        };
-      });
-    });
-  }));
-
-
-  console.log("forceEdges", forceEdges);
+  // var forceEdges = _.flattenDeep(foci.links().map(l => {
+  //   return l.source.nodes.map(s => {
+  //     return l.target.nodes.map(t => {
+  //       return {
+  //         source: nodes.find(d => d.__setKey__ === s.__setKey__),
+  //         target: nodes.find(d => d.__setKey__ === t.__setKey__)
+  //         // intersec: l.intersec
+  //       };
+  //     });
+  //   });
+  // }));
+  //
+  //
+  // console.log("forceEdges", forceEdges);
 
   //
   // // this should look like:
@@ -439,8 +500,8 @@ d3.json("data.json", function(error, data) {
   //
   // var comps = biconnectedComponents(foci.data(), foci.links());
   // console.log("biconnectedComponents", comps);
-  // var gr = simple_comp(foci.data(), foci.links());
-  // console.log("gr", gr);
+  var gr = simple_comp(foci.data(), foci.links());
+  console.log("gr", gr);
 
   //
   // var cut_vertices = _.uniq(_.flatten(comps.map(c => {
@@ -512,6 +573,19 @@ d3.json("data.json", function(error, data) {
   //     .attr("fill", "orange");
 
 
+  var circle = svg.selectAll(".circle")
+    .data(foci.data().filter(d => !d.label && d.nodes.length > 0))
+    .enter()
+    .append("circle")
+      // .attr("transform", d => "translate(" + (-d.width / 2) + "," + (-d.height/ 2) + ")")
+      .attr("class", "circle")
+      .attr("r", 20)
+      .attr("cx", d => d.center.x)
+      .attr("cy", d => d.center.y)
+      .attr("stroke", "black")
+      .attr("stroke-width", 0.5)
+      .attr("fill",  "none");
+
   var doc = svg.selectAll(".doc")
     .data(nodes.filter(d => !d.label), d => d.id);
 
@@ -522,14 +596,28 @@ d3.json("data.json", function(error, data) {
       .attr("class", "doc")
       .attr("width", d => d.width)
       .attr("height", d => d.height)
-      .attr("rx", 2)
-      .attr("ry", 2)
+      .attr("rx", 1)
+      .attr("ry", 1)
       .attr("stroke", "black")
-      .attr("stroke-width", "2")
-      .attr("fill", "white")
+      .attr("stroke-width", 0.5)
+      .attr("fill",  "white")
       .append("title")
         .text(function(d) { return d.__setKey__; });
 
+  var label = svg.selectAll(".label")
+    .data(nodes.filter(d => d.label), d => d.id);
+
+  label
+    .enter()
+    .append("text")
+    .attr("font-size", 10)
+    .attr("class", "doc")
+    .text(d => d.text);
+
+  label.each(function(d) {
+    d.width = this.getBBox().width;
+    d.height = this.getBBox().height;
+  });
 
   var circle = svg.append("g")
       .attr("class", "circle-cont")
@@ -549,27 +637,27 @@ d3.json("data.json", function(error, data) {
         .attr("opacity", 0.1)
         .on("click", d => console.log(d));
 
-  // var link = svg.selectAll(".link")
-  //              .data(foci.links());
-  //
-  // // build the arrow.
-  // svg.append("svg:defs").selectAll("marker")
-  //     .data(["end"])      // Different link/path types can be defined here
-  //   .enter().append("svg:marker")    // This section adds in the arrows
-  //     .attr("id", String)
-  //     .attr("viewBox", "0 -5 10 10")
-  //     .attr("refX", 15)
-  //     .attr("refY", -1.5)
-  //     .attr("markerWidth", 6)
-  //     .attr("markerHeight", 6)
-  //     .attr("orient", "auto")
-  //   .append("svg:path")
-  //     .attr("d", "M0,-5L10,0L0,5");
-  //
-  // link.enter().insert("line", ":first-child")
-  //              //    .attr("class", function(d) { return "link " + d.type; })
-  //              .attr("class", "link")
-  //              .attr("marker-end", "url(#end)");
+  var link = svg.selectAll(".link")
+               .data(foci.links());
+
+  // build the arrow.
+  svg.append("svg:defs").selectAll("marker")
+      .data(["end"])      // Different link/path types can be defined here
+    .enter().append("svg:marker")    // This section adds in the arrows
+      .attr("id", String)
+      .attr("viewBox", "0 -5 10 10")
+      .attr("refX", 15)
+      .attr("refY", -1.5)
+      .attr("markerWidth", 6)
+      .attr("markerHeight", 6)
+      .attr("orient", "auto")
+    .append("svg:path")
+      .attr("d", "M0,-5L10,0L0,5");
+
+  link.enter().insert("line", ":first-child")
+               //    .attr("class", function(d) { return "link " + d.type; })
+               .attr("class", "link")
+               .attr("marker-end", "url(#end)");
 
 
 
@@ -577,9 +665,6 @@ d3.json("data.json", function(error, data) {
 
   simulation.on("tick", function(e) {
 
-    // doc.each(d => {
-    //   moveToPos(d, {x: d.center.x, y: d.center.y}, e.alpha );
-    // });
     //
     // var q2 = d3.geom.quadtree(doc.data());
     // doc.each(d => {
@@ -587,22 +672,25 @@ d3.json("data.json", function(error, data) {
     //   // boundPanel(d, panels.center, 1);
     // });
 
-    // doc.each((collide(doc.data(), e.alpha, 10)));
+    // label.each((collide(label.data(), e.alpha, 10)));
     //
-    // svg.selectAll("path.group")
-    //   .data(foci.groups())
-    //     .attr("d", d => groupPath(d.values))
-    //   .enter()
-    //     // .insert("g")
-    //     .insert("path", "circle")
-    //     .attr("class", "group")
-    //     .style("fill", (_, i) => fill(i))
-    //     .attr("title", d => d.key)
-    //     .style("stroke", groupFill)
-    //     // .style("stroke-width", 40)
-    //     .style("stroke-linejoin", "round")
-    //     .style("opacity", 0.2)
-    //     .attr("d", d => groupPath(d.values));
+    svg.selectAll("path.hull")
+      .data(gr)
+        .attr("d", d => groupPath(d))
+      .enter()
+        .insert("g")
+        .attr("class", "group")
+        .append("path", "circle")
+        .attr("class", "hull")
+        .attr("id", (d, i) => "co " + i)
+        .style("fill", (_, i) => fill(i))
+        .style("stroke-linejoin", "round")
+        .style("stroke-width", 10)
+        // .style("stroke", groupFill)
+        .style("opacity", 0.2)
+        .attr("title", d => d.key)
+        .attr("d", d => groupPath(d));
+
 
     // svg.selectAll("path.comp")
     //   .data(groupedNodes)
@@ -615,14 +703,29 @@ d3.json("data.json", function(error, data) {
     //     .style("stroke-linejoin", "round")
     //     .style("opacity", 0.2)
     //     .attr("d", groupPath);
+
+    // doc.each(d => boundMargin(d, width, height, margin));
+    // label.each(d => boundMargin(d, width, height, margin));
+
+    doc.attr("transform", d => {
+      return "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")";
+    });
+    label.attr("transform", d => {
+      return "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")";
+    });
+
     // link
     //   .attr("x1", d => d.source.x)
     //   .attr("y1", d => d.source.y)
     //   .attr("x2", d => d.target.x)
     //   .attr("y2", d => d.target.y);
 
-    doc.attr("transform", d => "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")");
-
+  // node.attr("cx", function(d) {
+  //   return d.x = Math.max(r, Math.min(width - r, d.x));
+  // })
+  // .attr("cy", function(d) {
+  //   return d.y = Math.max(r, Math.min(height - r, d.y));
+  // });
     // doc.attr("transform", function(d) { return "rotate(" + (d.x - 90) + ")translate(" + d.y + ")"; })
     // doc.attr("x", d => d.x - d.width / 2 );
     // doc.attr("y", d => d.y - d.width / 2 );
@@ -630,7 +733,30 @@ d3.json("data.json", function(error, data) {
     marching_squares(svg, groupsById);
   });
 
-  // force.start();
+  var tp = svg.selectAll(".descr")
+      .data(gr)
+      .enter()
+      .append("text")
+      .attr("class", "descr")
+      // .attr("text-anchor", "middle")
+      .attr("word-spacing", "10")
+      // .attr("font-size", "20")
+      .attr("dy", "-10")
+      // .attr("dx", "100")
+      // .attr("startOffset", "25%")
+    .append("textPath")
+      // .text("data VIZ")
+      .attr("xlink:href", (d, i) => "#co " + i);
+      // .data(["sample", "data", "vis", "dat"])
+      // .enter()
+      //
+  tp.selectAll("tspan")
+    .data(["data", "test", "vis", "urlaub", "more", "mehr", "plus"])
+    .enter()
+    .append("tspan")
+    .attr("font-size", () => Math.random() * 80 )
+  .text(d => d+" ")
+    .on("click", d => console.log("click0" + d));
 
   doc.on("click", d => console.log("d nodes", d.__setKey__, d.nodes, "shallow", d.shallow));
 });

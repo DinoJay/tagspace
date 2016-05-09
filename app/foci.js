@@ -1,6 +1,5 @@
 import d3 from "d3";
 import _ from "lodash";
-// import cola from "webcola";
 import d3_force from "d3-force";
 import d3_hierarchy from "d3-hierarchy";
 
@@ -102,44 +101,28 @@ function biconnectedComponents(graph) {
 }
 
 
-function moveToCenter(alpha, energy) {
-  var affectSize = alpha * energy;
-  return function(d) {
-    d.x = d.x + (d.center.x - d.x) * affectSize;
-    d.y = d.y + (d.center.y - d.y) * affectSize;
-  };
-}
-
-// function moveToDX(alpha, energy) {
-//   var affectSize = alpha * energy;
-//   return function(d) {
-//     d.x = d.x + (d.center.x - d.x) * affectSize;
-//     d.y = d.y + (d.center.y - d.y) * affectSize;
-//   };
-// }
-
-function groups(nodes) {
+function deriveGroups(nodes) {
   if (!nodes) return this._groups;
 
-  var shallowNodes = nodes.filter(d => d.data.shallow);
-  var labelNodes = nodes.filter(d => d.data.label);
+  var realNodes = nodes.filter(d => !d.label);
+  var labelNodes = nodes.filter(d => d.label);
 
-  var spread_data = _.flatten(shallowNodes.map(n => {
-      var clones = n.data.sets.map(t => {
+  var spread_data = _.flatten(realNodes.map(n => {
+      var clones = n.sets.map(t => {
         var clone = _.cloneDeep(n);
-        clone.data.tag = t;
+        clone.tag = t;
         return clone;
-      }).filter(d => d.data.__key__ !== "root");
+      }).filter(d => d.__key__ !== "root");
       return clones;
     }));
 
   var nested_data = d3.nest()
-    .key(d => d.data.tag)
+    .key(d => d.tag)
     .entries(spread_data).filter(d => d.values.length > 1);
 
   var uniq_nested_data = _.uniqWith(nested_data, (a, b) => {
-      var aKeys = a.values.map(d => d.data.__key__);
-      var bKeys = b.values.map(d => d.data.__key__);
+      var aKeys = a.values.map(d => d.__key__);
+      var bKeys = b.values.map(d => d.__key__);
       return _.isEqual(aKeys, bKeys);
   });
 
@@ -149,20 +132,26 @@ function groups(nodes) {
     return g;
   });
 
-  groups.forEach(g => {
+  var sortedGroups = _.sortBy(groups, g => g.values.length).reverse();
+
+  console.log("sortedGroups", sortedGroups);
+
+  sortedGroups.forEach(g => {
     labelNodes.forEach(l => {
-    var sameParent = g.values.find(v => v.parent.data.__key__ === l.parent.data.__key__);
-    console.log("sameParent", sameParent);
-    if (sameParent) {
-      g.values.push(l);
-    }
+      // var sameParent = g.values.find(v => {
+      //   return v.parent && v.parent.__key__ === l.parent.__key__;
+      // });
+      if (l.interSet.indexOf(g.key) !== -1) {
+        // l.text = g.id;
+        g.values.push(l);
+      }
     // d.values = d.values.map(d => d.data);
     });
   });
 
-  groups.forEach(d => {
-    d.values = d.values.map(d => d.data);
-  });
+  // groups.forEach(d => {
+  //   d.values = d.values.map(d => d.data);
+  // });
 
   this._groups = groups;
 
@@ -207,7 +196,7 @@ function start() {
       labelNode.text = labelNode.__key__ + " labelNode";
       labelNode.__key__ = labelNode.__key__ + " labelNode";
       labelNode.id = labelNode.__key__ + " labelNode";
-      console.log("__key__", labelNode.__key__);
+      // console.log("__key__", labelNode.__key__);
       labelNode.nodes = [{
         id: labelNode.__key__ + " labelNode",
         "__key__": labelNode.__key__ + " labelNode",
@@ -226,18 +215,21 @@ function start() {
     }
   }
 
-  function runForce(nodes, that) {
+  function runForce(nodes, links, that) {
         // .on("tick", ticked);
 
+    console.log("force Nodes", nodes);
     var center = that._size.map(d => d/2);
+    // center[0]-= 300;
 
     var simulation = d3_force.forceSimulation(nodes)
       .force("charge", d3_force.forceManyBody()
-                               .strength(-100)
-                               .distanceMin(-30)
+                         .strength(d => d.label ? -10 : d.nodes.length * -30)
+                         .distanceMin(30)
       )
       .force("link", d3_force.forceLink()
-                             .distance(80)
+                             .distance(l => l.target.label ? 10 : 35)
+                             .strength(1)
                              .iterations(1))
       // .force("position", d3_force.forcePosition());
       .force("center", d3_force.forceCenter(...center));
@@ -251,11 +243,50 @@ function start() {
     //   .linkStrength(that._linkStrength)
     //   .linkDistance(d => that._linkDistance(d));
 
-    nodes.forEach(d => {
-      d.width = 11;
-      d.height = 20;
+
+    var linkedByIndex = {};
+    links.forEach(function(l) {
+      linkedByIndex[l.source + "," + l.target] = l;
     });
 
+    var labelNodes = nodes.filter(n => isParent(n, linkedByIndex))
+        .map((n, i)=> {
+          var links = outLinks(n, nodes, linkedByIndex);
+          var interSet = links[0].interSet;
+          return {
+            id: n.__key__ + "label",
+            index: nodes.length + i,
+            label: true,
+            text: interSet.join(","),
+            interSet: interSet,
+            parent: n
+          };
+        });
+    var labelLinks = labelNodes.map(n => {
+      return {source: n.parent.index, target: n.index};
+    });
+
+    nodes.push(...labelNodes);
+    links.push(...labelLinks);
+
+    linkedByIndex = {};
+    links.forEach(function(l) {
+      linkedByIndex[l.source + "," + l.target] = l;
+    });
+    nodes.forEach(n => n.parent = getParent(n, linkedByIndex, nodes));
+
+    console.log("labelNodes", labelNodes, "labelLinks", labelLinks);
+
+    nodes.forEach(d => {
+      if (d.label) {
+        d.width = 40;
+        d.height = 30;
+      } else {
+        d.width = 11;
+        d.height = 20;
+      }
+
+    });
     // var colaForce = cola.d3adaptor()
     //   // .flowLayout("y", 12)
     //   .handleDisconnected(true)
@@ -273,11 +304,10 @@ function start() {
       // .groups(gs);
       //
 
-
-      simulation.nodes(nodes);
-      simulation.force("link").links(links);
-      // .on("tick", ticked);
-      simulation.stop();
+    simulation.nodes(nodes);
+    simulation.force("link").links(links);
+    // .on("tick", ticked);
+    simulation.stop();
 
     for (var i = 0, n = Math.ceil(Math.log(simulation.alphaMin()) /
       -simulation.alphaDecay()); i < n; ++i) {
@@ -285,28 +315,38 @@ function start() {
     }
 
     var gs = that.groups(nodes);
-    that._groups = gs;
+    // that._groups = gs;
 
     console.log("GS", gs);
+    // console.log("Nodes after force", nodes.filter(d => d.label));
 
     nodes.forEach(function(d) {
       // console.log("d", d);
       d.center = {
         x: d.x,
-        y: d.y,
-        r: d.r
+        y: d.y
+        // r: d.r
       };
 
       // TODO: check
-      d.nodes.forEach((e)=> {
-        e.center = Object.assign({}, d.center);
-        e.bounds = Object.assign({}, d.bounds);
-        // e.center.px = e.center.x + (i * 10);
-        // e.center.py = e.center.y + (i * 10);
-        // // e.center.z = i;
-        // e.dx = d.dx;
-        // e.dy = d.dy;
-        });
+      if (!d.label) {
+        d.nodes.forEach((e)=> {
+          e.center = Object.assign({}, d.center);
+          // e.bounds = Object.assign({}, d.bounds);
+          // e.center.px = e.center.x + (i * 10);
+          // e.center.py = e.center.y + (i * 10);
+          // // e.center.z = i;
+          // e.dx = d.dx;
+          // e.dy = d.dy;
+          });
+      } else {
+          d.center = Object.assign({}, d.center);
+          // console.log("d", d);
+          d.vx = 0;
+          d.vy = 0;
+          d.x = 0;
+          d.y = 0;
+      }
     });
     return nodes;
   }
@@ -325,7 +365,7 @@ function start() {
     console.log("size", that._size);
     var pack = d3_hierarchy.pack()
         .size(that._size)
-        // .radius(d => d.data.label ? 200 : d.data.nodes.length * 5)
+        // .radius(d => d.data.label ? 10 : d.data.nodes.length * 5)
         .padding(0);
 
     var root = {
@@ -363,19 +403,22 @@ function start() {
     var rootNode = d3_hierarchy.hierarchy(root);
 
     // TODO: Bug ??
-    rootNode.sum((d) => d.nodes.length > 0 ? d.nodes.length * 3: 50);
-    rootNode.sort((a, b) => a.data.nodes.length - b.data.nodes.length);
+    rootNode.sum((d) => d.nodes.length > 1 ? d.nodes.length * 3: 30);
+    rootNode.sort((a, b) => !b.data.label);
     pack(rootNode);
 
     var packed = rootNode.descendants();
 
     packed.forEach(d => {
+      d = _.merge(d, d.data);
       d.data.center = {
         x: d.x,
         y: d.y,
         r: d.r
       };
     });
+
+    // console.log("PACKED", packed);
 
     var packedNodes = packed.map(d => {
       return d.data;
@@ -392,12 +435,12 @@ function start() {
     //   d.index = i;
     // });
 
-    console.log("shallow nodes", shallowNodes);
-    console.log("LABEL NODES", labelNodes);
+    // console.log("shallow nodes", shallowNodes);
+    // console.log("LABEL NODES", labelNodes);
 
     that._links = linkObjs;
     // TODO: buggy
-    var gs = that.groups(packed);
+    var gs = that.deriveGroups(packed);
     console.log("GROUPS", gs);
     // labelNodes.forEach(l => {
     //   gs.for
@@ -412,7 +455,7 @@ function start() {
   var nodes = this.sets();
   var links = this.links();
 
-  this.data(runTree(nodes, this));
+  this.data(runForce(nodes, links, this));
 
   return this;
 }
@@ -494,16 +537,20 @@ function initSets(data) {
   var sets = extractSets(data);
   var setData = sets.values();
 
-  var G = prepareGraph(setData);
+  var G = prepareGraph(this, setData);
 
+  // G.nodes.filter(n => {
+  //   console.log("N", n);
+  // })
   // check
   this._sets = G.nodes;
+
   this._fociLinks = G.edges;
 
   return this;
 }
 
-function prepareGraph(setData) {
+function prepareGraph(that, setData) {
   // if (!data) return this._sets;
 
   var fociLinks = [];
@@ -518,8 +565,8 @@ function prepareGraph(setData) {
   nodes.forEach(s => {
     nodes.forEach(t => {
       var intersect = _.intersection(s.sets, t.sets);
-      var linkExist = fociLinks.findIndex(l => (
-        l.source === s.index && l.target === t.index || l.target === s.index && l.source === t.index)) === -1 ? false : true;
+      // var linkExist = fociLinks.findIndex(l => (
+      //   l.source === s.index && l.target === t.index || l.target === s.index && l.source === t.index)) === -1 ? false : true;
 
       if (s.index !== t.index && intersect.length > 0)
         fociLinks.push({
@@ -541,10 +588,10 @@ function prepareGraph(setData) {
 
   // console.log("linkedByIndex", linkedByIndex);
 
+  // TODO
   // this._linkedByIndex = linkedByIndex;
 
   // TODO: do more testing
-
   return forest(nodes, linkedByIndex);
 
 
@@ -585,9 +632,12 @@ function prepareGraph(setData) {
           var vs = nbsByTag(u, linkedByIndex, nodes, visitedTags);
 
           var sorted = _.sortBy(vs.map(i => nodes[i]), d => {
-            return d.sets.length;
-            // var conn = connectionsIndex(d.index, linkedByIndex, sv.map(i => nodes[i]));
-            // return 100 * conn / d.sets.length;
+            // return d.sets.length;
+            // return d.nodes.length;
+            var conn = connectionsIndex(d.index, linkedByIndex,
+              sv.map(i => nodes[i]));
+            console.log("conn", conn);
+            return 100 * conn / d.sets.length;
           }).map(d => d.index).reverse();
 
           // console.log("vs", sorted.map(u => nodes[u].__key__));
@@ -597,12 +647,14 @@ function prepareGraph(setData) {
           sorted.forEach(v => {
             if (G.vertices.indexOf(v) !== -1) {
               var filterOut = G.edges.filter(l => l.target === v);
+              // TODO:
               // console.log("filterOut", filterOut);
               G.edges = _.difference(G.edges, filterOut);
 
               G.edges.push({
                 source: u,
-                target: v
+                target: v,
+                interSet: _.intersection(nodes[u].sets, nodes[v].sets)
               });
             } else {
               G.vertices.push(v);
@@ -612,7 +664,8 @@ function prepareGraph(setData) {
 
               G.edges.push({
                 source: u,
-                target: v
+                target: v,
+                interSet: _.intersection(nodes[u].sets, nodes[v].sets)
               });
               q.push(v);
 
@@ -782,15 +835,42 @@ function connections(a) {
   return connections;
 }
 
-function hasConnections(a) {
-  for (var property in this._linkedByIndex) {
+function outLinks(a, nodes, linkedByIndex) {
+  var links = [];
+  for (var property in linkedByIndex) {
     var s = property.split(",");
-    if ((s[0] == a.index || s[1] == a.index) && this._linkedByIndex[property])
+    if ((s[0] == a.index) && linkedByIndex[property])
+      links.push(linkedByIndex[property]);
+  }
+  return links;
+}
+
+function hasConnections(a, linkedByIndex) {
+  for (var property in linkedByIndex) {
+    var s = property.split(",");
+    if ((s[0] == a.index || s[1] == a.index) && linkedByIndex[property])
       return true;
   }
   return false;
 }
 
+function isParent(a, linkedByIndex) {
+  for (var property in linkedByIndex) {
+    var s = property.split(",");
+    if ((s[0] == a.index) && linkedByIndex[property])
+      return true;
+  }
+  return false;
+}
+
+function getParent(a, linkedByIndex, nodes) {
+  for (var property in linkedByIndex) {
+    var s = property.split(",");
+    if ((s[1] == a.index) && linkedByIndex[property])
+      return nodes[s[0]];
+  }
+  return null;
+}
 // function nbsIndex(a, linkedByIndex) {
 //   var nbs = 0;
 //   for (var property in linkedByIndex) {
@@ -801,7 +881,6 @@ function hasConnections(a) {
 //   }
 //   return connections;
 // }
-
 
 
 function neighbors(a, linkedByIndex, nodes) {
@@ -923,7 +1002,7 @@ const d3Foci = function() {
     gravity: gravity,
     start: start,
     links: links,
-    groups: groups,
+    groups: deriveGroups,
 
     connections: connections,
     hasConnections: hasConnections

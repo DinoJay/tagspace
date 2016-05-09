@@ -4,11 +4,11 @@ import d3 from "d3";
 var color = d3.scale.category20();
 
 var cell_size = 10;
-var isolevel = 0.0010;
+var isolevel = 0.0050;
 var epsilon = 0.00000001;
 var grid = {
-  width: 1200,
-  height: 800
+  width: 1800,
+  height: 1200
 };
 
 var set = []; //the current set for the bubble
@@ -265,44 +265,45 @@ function draw_marching_squares(svg, groups) {
 
     iterationOfMarchingSquares += 1;
 
-    var filteredPoints = bubblePoints.filter(function(x){
-      return x.group === g.key;
-    });
-
-    groupedPoints.push(filteredPoints);
+    // var filteredPoints = bubblePoints.filter(function(x){
+    //   return x.group === g.key;
+    // });
+    //
+    // groupedPoints.push(filteredPoints);
     // console.log("bubblePoints", bubblePoints);
     var sortedBubblePoints = sortBubblePoints(bubblePoints);
 
     var arrayOfArrays = splitSortedBubblePoints(sortedBubblePoints);
 
     var curve = d3.svg.line()
-          .interpolate("monotone")
+          .interpolate("basis-closed")
            .x(function(d) { return d.x; })
            .y(function(d) { return d.y; });
 
-    // if(typeof prevArrayOfArraysLength[parseInt(g.key] != 'undefined'){
-       // for(var i = 0 ; i < prevArrayOfArraysLength[g.key]; i++){
-       //     svg.selectAll(".bubble"+g.key+i).remove();
-       // }
+    // if(typeof prevArrayOfArraysLength[parseInt(g.key) != 'undefined')){
+    //    for(var i = 0 ; i < prevArrayOfArraysLength[g.key]; i++){
+    //        svg.selectAll(".bubble"+g.key+i).remove();
+    //    }
     // }
 
-     // for(var i = 0 ; i < arrayOfArrays.length; i++){
+     // for(var j = 0 ; j < arrayOfArrays.length; j++){
          // var points = arrayOfArrays[i];
          svg.select(".bubble-cont").selectAll(".bubble-"+g.key).remove();
 
          svg.select(".bubble-cont")
            .selectAll(".bubble-"+g.key)
             .data(arrayOfArrays)
+              // .attr("d", function(d){ return curve(d); })
             .enter()
             .append("g")
-            .attr("class", "bubble-"+g.key)
             .insert("path", ":first-child")
-              .attr("id", (d, i) => "co" + i)
+            .attr("class", "bubble-"+g.key)
+              // .attr("id", (d, i) => "co" + i)
               .attr("d", function(d){ return curve(d); })
                .attr("fill", () => color(g.key))
-               // .attr("stroke", "black")
+               .attr("stroke", "black")
                // .attr("stroke-width", "20px")
-               .attr("stroke-linejoin", "round")
+               // .attr("stroke-linejoin", "round")
                .attr("opacity", groupFillOpacity);
 
           // svg.select(".bubble-cont")
@@ -316,7 +317,7 @@ function draw_marching_squares(svg, groups) {
      // }
 
 
-    prevArrayOfArraysLength[g.key] = arrayOfArrays.length;
+    // prevArrayOfArraysLength[g.key] = arrayOfArrays.length;
   }); // g
 
   return groupedPoints;
@@ -328,7 +329,7 @@ function sortBubblePoints(bubblePoints){
   var bubblePointsCopy = bubblePoints;
   var sortedBubblePoints = [];
   sortedBubblePoints.push(bubblePointsCopy[0]);
-  bubblePointsCopy = bubblePointsCopy.slice(1,bubblePoints.length);
+  bubblePointsCopy = bubblePointsCopy.slice(0, bubblePoints.length);
   var id = bubblePointsCopy[0].id;
 
   for (var i = 0 ; i < bubblePoints.length-1; i++){
@@ -336,7 +337,7 @@ function sortBubblePoints(bubblePoints){
       var shortestDistance = Infinity, shortestIndex=null;
       for (var j = 0 ; j < bubblePointsCopy.length; j++){
           //calculate distance
-          var dist = computeDistance(sortedBubblePoints[i],bubblePointsCopy[j]);
+          var dist = computeDistance(sortedBubblePoints[i], bubblePointsCopy[j]);
           if(dist<shortestDistance){
               shortestIndex = j;
               shortestDistance = dist;
@@ -379,7 +380,7 @@ function squared(a){
 }
 
 function computeDistance(a,b){
-  return Math.sqrt( squared(a.x - b.x) + squared(a.y- b.y) );
+  return Math.pow( squared(a.x - b.x) + squared(a.y- b.y), 2 );
 }
 
 export default draw_marching_squares;
