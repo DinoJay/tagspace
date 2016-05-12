@@ -5,15 +5,94 @@ import d3_force from "d3-force";
 
 import marching_squares from "./marchingSquaresHelpers.js";
 import offsetInterpolate from "./polyOffset.js";
+import PolyK from "./polyk.js";
 // import ClipperLib from "js-clipper";
+// import Raphael from "raphael";
+import lineclip from "lineclip";
+import pathParser from "svg-path-parser";
+
+function reversePath(pathString) {
+    var pathPieces = pathString.match(/[MLHVCSQTA][-0-9.,]*/gi);
+    var reversed = "";
+    var skip = true;
+    var previousPathType;
+    for (var i = pathPieces.length - 1; i >= 0; i--) {
+        var pathType = pathPieces[i].substr(0, 1);
+        var pathValues = pathPieces[i].substr(1);
+        switch (pathType) {
+            case "M":
+            case "L":
+                reversed += (skip ? "" : pathType) + pathValues;
+                skip = false;
+                break;
+            case "C":
+                var curvePieces = pathValues.match(/^([-0-9.]*,[-0-9.]*),([-0-9.]*,[-0-9.]*),([-0-9.]*,[-0-9.]*)$/);
+                reversed += curvePieces[3] + pathType + curvePieces[2] + "," + curvePieces[1] + ",";
+                skip = true;
+                break;
+            default:
+                alert("Not implemented: " + pathType);
+                break;
+        }
+    }
+    return reversed;
+}
 
 require("./style/style.less");
 
-var labelLine = d3.svg.line().x(function(d) {
+var flipTable =  {
+        a : "\u0250",
+        b : "q",
+        c : "\u0254",
+        d : "p",
+        e : "\u01DD",
+        f : "\u025F",
+        g : "\u0183",
+        h : "\u0265",
+        i : "\u0131",
+        j : "\u027E",
+        k : "\u029E",
+        l : "\u05DF",
+        m : "\u026F",
+        n : "u",
+        r : "\u0279",
+        t : "\u0287",
+        v : "\u028C",
+        w : "\u028D",
+        y : "\u028E",
+        "." : "\u02D9",
+        "[" : "]",
+        "(" : ")",
+        "{" : "}",
+        "?" : "\u00BF",
+        "!" : "\u00A1",
+        "\"" : ",",
+        "<" : ">",
+        "_" : "\u203E",
+        "\\" : "\\",
+        ";" : "\u061B",
+        "\u203F" : "\u2040",
+        "\u2045" : "\u2046",
+        "\u2234" : "\u2235"
+    };
+
+var flipText =  function(input) {
+        var last = input.length - 1;
+        var result = new Array(input.length);
+        for (var i = last; i >= 0; --i) {
+            var c = input.charAt(i);
+            var r = this.flipTable[c];
+            result[last - i] = r != undefined ? r : c;
+        }
+        return result.join("");
+};
+
+var labelLine = d3.svg.line()
+  .x(function(d) {
   return d.x;
 }).y(function(d) {
   return d.y;
-}).interpolate(offsetInterpolate(50));
+}).interpolate(offsetInterpolate(50, true));
 
 var width = 1200;
 var height = 800;
@@ -321,14 +400,7 @@ var bfs = function(v, adjlist, visited) {
 };
 
 var groupPath = function(d) {
-  if (d.length < 3) return null;
-  // var points = d.map(function(i) { return [i.x, i.y]; });
-  // var hull = d3.geom.hull(points);
-  // // console.log("ch", ch);
-  // if (hull.length === 0) console.log("tags", d.map(d => d.title));
-  // // return hull.length > 0 ? "M" + hull.join("L") + "Z" : null;
-  // return ch.length > 0 ? "M" + ch.join("L") + "Z" : null;
-  // console.log("group", d);
+  if (d.nodes.length < 2) return null;
 
   var hull = d3.geom.hull()
     .x(function(d) {
@@ -337,36 +409,91 @@ var groupPath = function(d) {
     return d.y;
   });
 
-  // var h = d3.geom.hull(d.map(d => [d.x, d.y])).reverse();
-
-  // var path = h.map(d => {
-  //   return {X: d[0], Y: d[1]};
-  // });
-  // var co = new ClipperLib.ClipperOffset(2, 0.25);
-  // co.AddPath(path, ClipperLib.JoinType.jtMiter,
-  //   ClipperLib.EndType.etClosedPolygon);
-  // console.log("co", co);
-  // var solution = new ClipperLib.Paths();
-  // co.Execute(solution, 50);
-  //
-  // var skel_hull = solution[0].map(d => [d.X, d.Y]);
-  // console.log("skel_hull", skel_hull);
-
-  // var ch = d3.geom.delaunay(fakePoints).filter(function(t) {
-  //   return dsq(t[0],t[1]) < asq && dsq(t[0],t[2]) < asq && dsq(t[1],t[2]) < asq;
-  // });
-  // var offset = labelLine(hull(d.values.reverse()));
-  // return offset;
-
+var fakePoints = [];
+  d.nodes.forEach(function(e) {
+    var xOffset = 30;
+    var yOffset = 30;
+    fakePoints = fakePoints.concat([
+      // "0.7071" is the sine and cosine of 45 degree for corner points.
+      [e.x, (e.y + xOffset)],
+      [(e.x + (0.7071 * xOffset)), (e.y + (0.7071 * yOffset))],
+      [(e.x + xOffset), e.y],
+      [(e.x + (0.7071 * xOffset)), (e.y - (0.7071 * yOffset))],
+      [(e.x), (e.y - yOffset)],
+      [(e.x - (0.7071 * xOffset)), (e.y - (0.7071 * yOffset))],
+      [(e.x - xOffset), e.y],
+      [(e.x - (0.7071 * xOffset)), (e.y + (0.7071 * yOffset))]
+      ]);
+  });
   // return null;
-  var sorted = _.sortBy(d, e => e.nodes.length);
-  var h = hull(d);
-  var h0 = labelLine(h.reverse());
-  var h1 = "M" + h.map(d => [d.x, d.y]).join("L") + "Z";
+  // var h0 = labelLine(hull(d.nodes).reverse());
+  var fh = d3.geom.hull(fakePoints);
+  var first = fh[fh.length - 2];
+  var rev = fh.reverse();
+  var res = [first].concat(rev.slice(1, rev.length));
+  res = rev;
+
+  // var revH = [];
+  // for(var i = 0; i < fh.length - 1; i++) {
+  //
+  //   var ax = fh[i][0];
+  //   var bx = fh[i+1][0];
+  //   var ay = fh[i][1];
+  //   var by = fh[i+1][1];
+  //
+  //   if(ax > bx)  {
+  //     console.log("swap");
+  //     revH.push([bx, ay]);
+  //     fh[i+1] = [ax, by];
+  //   }
+  //   else revH.push([ax, ay]);
+  // }
+  // revH.push(fh[fh.length-1]);
+
+  var ps = "M" + fh.join("L") + "Z";
+  console.log("PS", ps);
+  console.log("PS parsed", pathParser(ps));
+  // var revP = reversePath(ps);
+  // console.log("revP", revP);
+  return ps;
+  // return "M" + revP;
+
+  // // var h1 = offsetInterpolate(100)(d3.geom.hull(d.nodes.map(d => [d.x, d.y])).reverse());
+  // // d.points = h1.points;
+  // var h1 = offsetInterpolate(75)(d3.geom.hull(d.values.map(d => [d.x, d.y])).reverse());
+  // // return h1;
+  // var ll = labelLine(hull(d.nodes).reverse());
+  // var lp = pathParser(ll);
+
+
+  // console.log("ll", ll);
+  // return ll;
+
+};
+
+
+var labelPath = function(d) {
+  // if (d.values.length < 2) return null;
+
+  // var hull = d3.geom.hull()
+  //   .x(function(d) {
+  //   return d.x;
+  // }).y(function(d) {
+  //   return d.y;
+  // });
+
+  // var h0 = labelLine(hull(d).reverse());
+  // var h1 = offsetInterpolate(100)(d3.geom.hull(d.values.map(d => [d.x, d.y])).reverse());
+  // console.log("h1", h1);
+  // console.log("pathData", pathData);
+  // var h1 = "M" + h.map(d => [d.x, d.y]).join("L") + "Z";
   // var sortedFakePoints = _.sortBy(d, d => d[1]);
   // return "M" + h0.join("L") + "Z";
-  return h1;
+  return d3.svg.line().interpolate("cardinal-closed")(d.values);
+  // return h0;
+
 };
+
 
 var groupFill = function(d, i) { return fill(i & 3); };
 
@@ -501,7 +628,11 @@ d3.json("data.json", function(error, data) {
   // var comps = biconnectedComponents(foci.data(), foci.links());
   // console.log("biconnectedComponents", comps);
   var gr = simple_comp(foci.data(), foci.links());
-  console.log("gr", gr);
+  var comps = gr.map((g, i) => {
+    return {id: i, values: g, points: null,
+      nodes: _.sortBy(_.flatten(g.map(d => d.nodes)), d => d.x)};
+  });
+  console.log("comps", comps);
 
   //
   // var cut_vertices = _.uniq(_.flatten(comps.map(c => {
@@ -633,7 +764,7 @@ d3.json("data.json", function(error, data) {
         .attr("id", function(d, i) { return "node-" + i; })
         .attr("r", function(d) { return d.center.r; })
         .style("stroke", "black")
-        .attr("fill", "black")
+        .attr("fill", "none")
         .attr("opacity", 0.1)
         .on("click", d => console.log(d));
 
@@ -674,23 +805,86 @@ d3.json("data.json", function(error, data) {
 
     // label.each((collide(label.data(), e.alpha, 10)));
     //
-    svg.selectAll("path.hull")
-      .data(gr)
+    var hulls = svg.selectAll("path.hull")
+      .data(comps)
         .attr("d", d => groupPath(d))
       .enter()
         .insert("g")
         .attr("class", "group")
         .append("path", "circle")
         .attr("class", "hull")
-        .attr("id", (d, i) => "co " + i)
-        .style("fill", (_, i) => fill(i))
+        .attr("id", d => "co " + d.id)
+        .style("fill", fill)
         .style("stroke-linejoin", "round")
         .style("stroke-width", 10)
         // .style("stroke", groupFill)
         .style("opacity", 0.2)
         .attr("title", d => d.key)
-        .attr("d", d => groupPath(d));
+        .attr("d", d => groupPath(d))
+        .on("click", function() {
+          // console.log("BBox", this.getBBox());
+          var bbox = this.getBBox();
+          svg.append("circle")
+            .attr("cx", bbox.x)
+            .attr("cy", bbox.y)
+            .attr("r", 5)
+            .attr("fill", "red");
 
+          svg.append("circle")
+            .attr("cx", bbox.x + bbox.width)
+            .attr("cy", bbox.y + bbox.height)
+            .attr("r", 5)
+            .attr("fill", "red");
+        });
+
+      // var hullLabels = svg.selectAll("path.hull").each(function(d) {
+      //   if (!d.points) return;
+      //
+      //   // console.log("BBox", this.getBBox());
+      //   var bbox = this.getBBox();
+      //   var x0, y0, x1, y1;
+      //   x0 = bbox.x - 100;
+      //   y0 = bbox.y + bbox.height / 2;
+      //   x1 = bbox.x + bbox.width + 100;
+      //   y1 = bbox.y + bbox.height / 2;
+      //
+      //   svg.append("circle")
+      //     .attr("cx", x0)
+      //     .attr("cy", y0)
+      //     .attr("r", 5)
+      //     .attr("fill", "red");
+      //
+      //   svg.append("circle")
+      //     .attr("cx", x1)
+      //     .attr("cy", y1)
+      //     .attr("r", 5)
+      //     .attr("fill", "red");
+      //
+      //   // console.log("lineclip", lineclip);
+      //   var cutPoly = PolyK.Slice(d.points, x0, y0, x1, y1);
+      //   var obj = {id: d.id, values: cutPoly[0]};
+      //
+      // svg.selectAll(".label-hull"+d.id)
+      //   .data([ obj ], d => d.id)
+      //   .enter()
+      //   .append("path", "circle")
+      //   .attr("class", "label-hull"+d.id)
+      //   // .attr("id", (d, i) => "label " + i)
+      //   .attr("id", (d, i) => "co " + d.id)
+      //   .style("fill", "none")
+      //   .style("stroke-linejoin", "round")
+      //   .style("stroke-width", 40)
+      //   .style("stroke", groupFill)
+      //   .style("opacity", 0.2)
+      //   // .attr("title", d => d.key)
+      //   .attr("d", labelPath(obj));
+      // });
+
+    // d3.selectAll(".hull").each(function(d){
+    //   var pathData = this.pathSegList;
+    //   console.log("pathData", d3.select(this));
+    // });
+    // console.log("hulls");
 
     // svg.selectAll("path.comp")
     //   .data(groupedNodes)
@@ -707,6 +901,7 @@ d3.json("data.json", function(error, data) {
     // doc.each(d => boundMargin(d, width, height, margin));
     // label.each(d => boundMargin(d, width, height, margin));
 
+    var hullpoints = d3.selectAll(".hull");
     doc.attr("transform", d => {
       return "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")";
     });
@@ -734,27 +929,40 @@ d3.json("data.json", function(error, data) {
   });
 
   var tp = svg.selectAll(".descr")
-      .data(gr)
+      .data(comps)
       .enter()
       .append("text")
+      // .attr("transform", () => "rotate(" + 180 + ")")
+    // .style("direction", "rtl")
+    // .style("unicode-bidi", "bidi-override")
       .attr("class", "descr")
-      // .attr("text-anchor", "middle")
-      .attr("word-spacing", "10")
+      // .attr("word-spacing", "10")
+      // .attr("spacing", "auto")
       // .attr("font-size", "20")
-      .attr("dy", "-10")
-      // .attr("dx", "100")
-      // .attr("startOffset", "25%")
+      .attr("dy", "-35")
+      // .attr("dx", "360")
     .append("textPath")
+      .attr("text-anchor", "middle")
+      .attr("startOffset", "50%")
       // .text("data VIZ")
-      .attr("xlink:href", (d, i) => "#co " + i);
+      // .attr("text-anchor", "start")
+      // .attr("method", "stretch")
+      // .attr("startOffset", "26%")
+      .attr("alignment-baseline", "text-after-edge")
+      .attr("dominant-baseline", "baseline")
+      .attr("xlink:href", (d, i) => "#co " + d.id);
       // .data(["sample", "data", "vis", "dat"])
       // .enter()
       //
   tp.selectAll("tspan")
-    .data(["data", "test", "vis", "urlaub", "more", "mehr", "plus"])
+    .data(["Jan", ", Arndt", ", Nils", ", Babba", ", Kiran", "and many more"])
+    // .data(["Jan"])
     .enter()
     .append("tspan")
-    .attr("font-size", () => Math.random() * 80 )
+    .style("transform", "scale(-1,1)")
+    .attr("font-size", () => 80 )
+    // .attr("transform", () => "rotate(" + (180) + ")")
+
   .text(d => d+" ")
     .on("click", d => console.log("click0" + d));
 

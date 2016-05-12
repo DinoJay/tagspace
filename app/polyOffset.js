@@ -32,9 +32,10 @@ vNormalized = function(v) {
 };
 
 
-var offsetInterpolate = function(offset) {
+var offsetInterpolate = function(offset, mode) {
   return function(polygon) {
-    var arc, copy, d, edge, first, l, offsetPairs, pairs, points, rotated, scaledNormal, v, w;
+    var arc, copy, d, edge, first, l, offsetPairs, pairs, points,
+    rotated, scaledNormal, v, w;
     if (polygon.length < 2) {
       return null;
     }
@@ -67,8 +68,11 @@ var offsetInterpolate = function(offset) {
       }
       return d += p;
     });
-    d += "Z";
-    return d;
+    d += "z";
+
+    // if (mode)
+      return d;
+    // else return {points: points, string: d};
   };
 };
 

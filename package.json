@@ -30,10 +30,14 @@
     "d3-force": "^0.5.0",
     "d3-hierarchy": "^0.2.1",
     "d3-measure-text": "0.0.2",
+    "flip-text": "^1.1.0",
     "jquery": "^2.2.0",
     "js-clipper": "^1.0.1",
+    "lineclip": "^1.1.5",
     "lodash": "^4.0.1",
+    "raphael": "^2.2.0",
     "simplify-js": "^1.2.1",
+    "svg-path-parser": "^1.0.1",
     "webcola": "git://github.com/tgdwyer/WebCola#master"
   },
   "devDependencies": {

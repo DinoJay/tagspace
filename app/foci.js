@@ -636,7 +636,6 @@ function prepareGraph(that, setData) {
             // return d.nodes.length;
             var conn = connectionsIndex(d.index, linkedByIndex,
               sv.map(i => nodes[i]));
-            console.log("conn", conn);
             return 100 * conn / d.sets.length;
           }).map(d => d.index).reverse();
 
