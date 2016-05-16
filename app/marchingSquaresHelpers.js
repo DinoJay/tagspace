@@ -3,8 +3,8 @@ import d3 from "d3";
 
 var color = d3.scale.category20();
 
-var cell_size = 10;
-var isolevel = 0.0050;
+var cell_size = 5;
+var isolevel = 0.0330;
 var epsilon = 0.00000001;
 var grid = {
   width: 1800,

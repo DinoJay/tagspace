@@ -32,7 +32,7 @@ vNormalized = function(v) {
 };
 
 
-var offsetInterpolate = function(offset, mode) {
+var offsetInterpolate = function(offset) {
   return function(polygon) {
     var arc, copy, d, edge, first, l, offsetPairs, pairs, points,
     rotated, scaledNormal, v, w;

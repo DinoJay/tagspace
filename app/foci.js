@@ -3,6 +3,8 @@ import _ from "lodash";
 import d3_force from "d3-force";
 import d3_hierarchy from "d3-hierarchy";
 
+var scale = 1;
+
 var convert_edgelist_to_adjlist = function(vertices, edgelist) {
   var adjlist = {};
   var i, len, pair, u, v;
@@ -224,14 +226,15 @@ function start() {
 
     var simulation = d3_force.forceSimulation(nodes)
       .force("charge", d3_force.forceManyBody()
-                         .strength(d => d.label ? -10 : d.nodes.length * -30)
-                         .distanceMin(30)
+                         .strength(d => d.label ? -5 : d.nodes.length * -10)
+                         // .distanceMin(-100)
       )
       .force("link", d3_force.forceLink()
-                             .distance(l => l.target.label ? 10 : 35)
+                             .distance(l => l.target.label ? 3 : 9)
                              .strength(1)
                              .iterations(1))
       // .force("position", d3_force.forcePosition());
+      .force("collide", d3_force.forceCollide(d => d.label ? 0 : 7))
       .force("center", d3_force.forceCenter(...center));
 
 
@@ -257,7 +260,7 @@ function start() {
             id: n.__key__ + "label",
             index: nodes.length + i,
             label: true,
-            text: interSet.join(","),
+            text: interSet.join(", "),
             interSet: interSet,
             parent: n
           };
@@ -277,32 +280,16 @@ function start() {
 
     console.log("labelNodes", labelNodes, "labelLinks", labelLinks);
 
-    nodes.forEach(d => {
-      if (d.label) {
-        d.width = 40;
-        d.height = 30;
-      } else {
-        d.width = 11;
-        d.height = 20;
-      }
-
-    });
-    // var colaForce = cola.d3adaptor()
-    //   // .flowLayout("y", 12)
-    //   .handleDisconnected(true)
-    //   .avoidOverlaps(true)
-    //   .size(that.size());
-    //   // .jaccardLinkLengths(40, 0.7);
+    // nodes.forEach(d => {
+    //   if (d.label) {
+    //     d.width = 40;
+    //     d.height = 30;
+    //   } else {
+    //     d.width = 6;
+    //     d.height = 10;
+    //   }
     //
-    // colaForce
-    //   .nodes(nodes)
-    //   .links(links)
-    //   .linkDistance(l => {
-    //     return l.source.nodes ? l.source.nodes.length * 10 : 20;
-    //     // return 40;
-    //   });
-      // .groups(gs);
-      //
+    // });
 
     simulation.nodes(nodes);
     simulation.force("link").links(links);
@@ -332,12 +319,6 @@ function start() {
       if (!d.label) {
         d.nodes.forEach((e)=> {
           e.center = Object.assign({}, d.center);
-          // e.bounds = Object.assign({}, d.bounds);
-          // e.center.px = e.center.x + (i * 10);
-          // e.center.py = e.center.y + (i * 10);
-          // // e.center.z = i;
-          // e.dx = d.dx;
-          // e.dy = d.dy;
           });
       } else {
           d.center = Object.assign({}, d.center);

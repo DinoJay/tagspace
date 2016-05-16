@@ -92,7 +92,7 @@ var labelLine = d3.svg.line()
   return d.x;
 }).y(function(d) {
   return d.y;
-}).interpolate(offsetInterpolate(50, true));
+}).interpolate(offsetInterpolate(30));
 
 var width = 1200;
 var height = 800;
@@ -171,7 +171,7 @@ function collide(node, padding, energy) {
             lx,
             ly;
 
-        console.log("node", node.width);
+        // console.log("node", node.width);
         if (absX < xSpacing && absY < ySpacing) {
             l = Math.sqrt(x * x + y * y) * energy;
 
@@ -411,8 +411,8 @@ var groupPath = function(d) {
 
 var fakePoints = [];
   d.nodes.forEach(function(e) {
-    var xOffset = 30;
-    var yOffset = 30;
+    var xOffset = 75;
+    var yOffset = 75;
     fakePoints = fakePoints.concat([
       // "0.7071" is the sine and cosine of 45 degree for corner points.
       [e.x, (e.y + xOffset)],
@@ -450,21 +450,18 @@ var fakePoints = [];
   // }
   // revH.push(fh[fh.length-1]);
 
-  var ps = "M" + fh.join("L") + "Z";
-  console.log("PS", ps);
-  console.log("PS parsed", pathParser(ps));
+  // var ps = "M" + fh.join("L") + "Z";
   // var revP = reversePath(ps);
   // console.log("revP", revP);
-  return ps;
+  return labelLine(hull(d.nodes).reverse());
+  // return ps;
   // return "M" + revP;
 
   // // var h1 = offsetInterpolate(100)(d3.geom.hull(d.nodes.map(d => [d.x, d.y])).reverse());
   // // d.points = h1.points;
   // var h1 = offsetInterpolate(75)(d3.geom.hull(d.values.map(d => [d.x, d.y])).reverse());
   // // return h1;
-  // var ll = labelLine(hull(d.nodes).reverse());
   // var lp = pathParser(ll);
-
 
   // console.log("ll", ll);
   // return ll;
@@ -503,11 +500,11 @@ d3.json("data.json", function(error, data) {
   // const { data: data, edges: edges } = prepareData(rawData.documents);
   // console.log("tagData", data);
   //d
-  data.documents.forEach(d => d.r = 12);
+  // data.documents.forEach(d => d.r = 12);
 
   var zoom = d3.behavior.zoom()
                .size(width, height)
-               .scaleExtent([-10, 20])
+               .scaleExtent([-10, 40])
                .on("zoom", () => {
                   svg.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
                 });
@@ -533,12 +530,12 @@ d3.json("data.json", function(error, data) {
                   // var conn = this.hasConnections(d);
                   // return conn > 0 ? -100 / conn : -100;
                   // return - d.nodes.length * 40;
-                  return -40;
+                  return -20;
                 })
                 .linkStrength(l => l.target.label ? 0: 0)
                 .linkDistance(function(l){
                   // var conn = this.connections(l.source);
-                  return 15;
+                  return 7;
                 })
                 .start();
 
@@ -548,10 +545,8 @@ d3.json("data.json", function(error, data) {
 
     return d.nodes.map(e => {
       e.center = d.center;
-      // e.x = d.x;
-      // e.y = d.y;
-      e.width = 5;
-      e.height = 8;
+      e.width = 1;
+      e.height = 2;
       return e;
     });
   }));
@@ -582,8 +577,8 @@ d3.json("data.json", function(error, data) {
       .force("y", d3_force.forceY(d => d.center.y).strength(1))
       .force("charge", d3_force.forceManyBody()
                                .theta(2)
-                               .strength(-40)
-                               // .distanceMin(-100)
+                               .strength(-2)
+                               .distanceMin(15)
       );
       // .force("collide", (alpha) => {
       //   label.each((collideCircle(label.data(), alpha, 100)));
@@ -627,11 +622,36 @@ d3.json("data.json", function(error, data) {
   //
   // var comps = biconnectedComponents(foci.data(), foci.links());
   // console.log("biconnectedComponents", comps);
+  var spreadTags = _.flatten(nodes.map(d => d.tags));
+
+  console.log("spreadTags", spreadTags);
+
+  // var allTags = d3.nest()
+  //   .key(d => d)
+  //   .entries(spreadTags)
+  // .sort((a, b) => d3.descending(a.values.length, b.values.length));
+  //
+  // var wordScale = d3.scale.linear()
+  //     .domain(d3.extent(allTags, d => d.values.length))
+  //     .rangeRound([10, 50]);
+
   var gr = simple_comp(foci.data(), foci.links());
   var comps = gr.map((g, i) => {
-    return {id: i, values: g, points: null,
-      nodes: _.sortBy(_.flatten(g.map(d => d.nodes)), d => d.x)};
+    var nodes = _.flatten(g.map(d => d.nodes));
+    var tags = d3.nest()
+      .key(d => d)
+      .entries(_.flatten(nodes.map(d => d.tags)))
+    .sort((a, b) => d3.descending(a.values.length, b.values.length));
+
+    return {
+      id: i + "comp",
+      values: g,
+      tags: tags,
+      nodes: nodes
+    };
   });
+
+  console.log("gr", gr);
   console.log("comps", comps);
 
   //
@@ -703,6 +723,72 @@ d3.json("data.json", function(error, data) {
   //     .attr("stroke-width", "2")
   //     .attr("fill", "orange");
 
+  var lc = svg.append("g")
+      .attr("class", "hull-labels")
+      .selectAll(".label-cont")
+      .data(comps);
+
+  var lcEnter = lc.enter();
+
+  var tp = lcEnter
+    .append("g")
+    .attr("class", ".label-cont")
+    .append("text")
+      .attr("class", "descr")
+    .append("textPath")
+      .attr("text-anchor", "middle")
+      .attr("startOffset", "50%")
+      .attr("alignment-baseline", "text-after-edge")
+      .attr("dominant-baseline", "baseline")
+      .attr("xlink:href", d => "#" + d.id);
+
+  // var tp = lc.selectAll(".descr").select("textPath");
+  tp.each(d => {
+    d.scale = d3.scale.linear()
+      .domain(d3.extent(d.tags, d => d.values.length))
+      .rangeRound([5, 50]);
+  });
+
+  tp.selectAll("tspan")
+    .data(d => d.tags.slice(0, 5))
+    .enter()
+    .append("tspan")
+    .attr("font-size", function(d) {
+      var wordScale = d3.select(this.parentNode).datum().scale;
+      return wordScale(d.values.length);
+    })
+  .text(d => d.key+" ")
+    .on("click", d => console.log("click0", d));
+
+
+  var hull = lc
+      // .attr("class", "group")
+      // .append("path", "circle")
+      .insert("path", ":first-child")
+      .attr("class", "hull")
+      .attr("id", d => d.id)
+      .style("fill", fill)
+      .style("stroke-linejoin", "round")
+      .style("stroke-width", 10)
+      // .style("stroke", groupFill)
+      .style("opacity", 0.2)
+      .attr("title", d => d.key)
+      .attr("d", groupPath)
+      .on("click", function() {
+        // console.log("BBox", this.getBBox());
+        var bbox = this.getBBox();
+        svg.append("circle")
+          .attr("cx", bbox.x)
+          .attr("cy", bbox.y)
+          .attr("r", 5)
+          .attr("fill", "red");
+
+        svg.append("circle")
+          .attr("cx", bbox.x + bbox.width)
+          .attr("cy", bbox.y + bbox.height)
+          .attr("r", 5)
+          .attr("fill", "red");
+      });
 
   var circle = svg.selectAll(".circle")
     .data(foci.data().filter(d => !d.label && d.nodes.length > 0))
@@ -710,7 +796,7 @@ d3.json("data.json", function(error, data) {
     .append("circle")
       // .attr("transform", d => "translate(" + (-d.width / 2) + "," + (-d.height/ 2) + ")")
       .attr("class", "circle")
-      .attr("r", 20)
+      .attr("r", 7)
       .attr("cx", d => d.center.x)
       .attr("cy", d => d.center.y)
       .attr("stroke", "black")
@@ -727,8 +813,8 @@ d3.json("data.json", function(error, data) {
       .attr("class", "doc")
       .attr("width", d => d.width)
       .attr("height", d => d.height)
-      .attr("rx", 1)
-      .attr("ry", 1)
+      .attr("rx", 0.05)
+      .attr("ry", 0.05)
       .attr("stroke", "black")
       .attr("stroke-width", 0.5)
       .attr("fill",  "white")
@@ -740,14 +826,25 @@ d3.json("data.json", function(error, data) {
 
   label
     .enter()
+    .append("g")
+    .attr("class", "label")
+    // .insert("rect", ":first-child")
     .append("text")
-    .attr("font-size", 10)
-    .attr("class", "doc")
+    // .attr("class", "label")
+    .attr("font-size", 5)
     .text(d => d.text);
 
   label.each(function(d) {
     d.width = this.getBBox().width;
     d.height = this.getBBox().height;
+
+    d3.select(this).select("text")
+      .attr("dy", d.height);
+    d3.select(this)
+      .insert("rect", ":first-child")
+      .attr("fill", "none")
+      .attr("width", d.width)
+      .attr("height", d.height);
   });
 
   var circle = svg.append("g")
@@ -792,116 +889,22 @@ d3.json("data.json", function(error, data) {
 
 
 
+  simulation.on("tick", function() {
 
-
-  simulation.on("tick", function(e) {
-
-    //
-    // var q2 = d3.geom.quadtree(doc.data());
-    // doc.each(d => {
-    //   q2.visit(collide(d, 0, 1));
-    //   // boundPanel(d, panels.center, 1);
-    // });
+    var q2 = d3.geom.quadtree(nodes);
+    nodes.forEach(d => {
+      q2.visit(collide(d, 4, 1));
+      // boundPanel(d, panels.center, 1);
+    });
 
     // label.each((collide(label.data(), e.alpha, 10)));
     //
-    var hulls = svg.selectAll("path.hull")
-      .data(comps)
-        .attr("d", d => groupPath(d))
-      .enter()
-        .insert("g")
-        .attr("class", "group")
-        .append("path", "circle")
-        .attr("class", "hull")
-        .attr("id", d => "co " + d.id)
-        .style("fill", fill)
-        .style("stroke-linejoin", "round")
-        .style("stroke-width", 10)
-        // .style("stroke", groupFill)
-        .style("opacity", 0.2)
-        .attr("title", d => d.key)
-        .attr("d", d => groupPath(d))
-        .on("click", function() {
-          // console.log("BBox", this.getBBox());
-          var bbox = this.getBBox();
-          svg.append("circle")
-            .attr("cx", bbox.x)
-            .attr("cy", bbox.y)
-            .attr("r", 5)
-            .attr("fill", "red");
-
-          svg.append("circle")
-            .attr("cx", bbox.x + bbox.width)
-            .attr("cy", bbox.y + bbox.height)
-            .attr("r", 5)
-            .attr("fill", "red");
-        });
-
-      // var hullLabels = svg.selectAll("path.hull").each(function(d) {
-      //   if (!d.points) return;
-      //
-      //   // console.log("BBox", this.getBBox());
-      //   var bbox = this.getBBox();
-      //   var x0, y0, x1, y1;
-      //   x0 = bbox.x - 100;
-      //   y0 = bbox.y + bbox.height / 2;
-      //   x1 = bbox.x + bbox.width + 100;
-      //   y1 = bbox.y + bbox.height / 2;
-      //
-      //   svg.append("circle")
-      //     .attr("cx", x0)
-      //     .attr("cy", y0)
-      //     .attr("r", 5)
-      //     .attr("fill", "red");
-      //
-      //   svg.append("circle")
-      //     .attr("cx", x1)
-      //     .attr("cy", y1)
-      //     .attr("r", 5)
-      //     .attr("fill", "red");
-      //
-      //   // console.log("lineclip", lineclip);
-      //   var cutPoly = PolyK.Slice(d.points, x0, y0, x1, y1);
-      //   var obj = {id: d.id, values: cutPoly[0]};
-      //
-      // svg.selectAll(".label-hull"+d.id)
-      //   .data([ obj ], d => d.id)
-      //   .enter()
-      //   .append("path", "circle")
-      //   .attr("class", "label-hull"+d.id)
-      //   // .attr("id", (d, i) => "label " + i)
-      //   .attr("id", (d, i) => "co " + d.id)
-      //   .style("fill", "none")
-      //   .style("stroke-linejoin", "round")
-      //   .style("stroke-width", 40)
-      //   .style("stroke", groupFill)
-      //   .style("opacity", 0.2)
-      //   // .attr("title", d => d.key)
-      //   .attr("d", labelPath(obj));
-      // });
-
-    // d3.selectAll(".hull").each(function(d){
-    //   var pathData = this.pathSegList;
-    //   console.log("pathData", d3.select(this));
-    // });
-    // console.log("hulls");
-
-    // svg.selectAll("path.comp")
-    //   .data(groupedNodes)
-    //     .attr("d", groupPath)
-    //   .enter().insert("path", "circle")
-    //     .attr("class", "comp")
-    //     .style("fill", "green")
-    //     .style("stroke", groupFill)
-    //     // .style("stroke-width", 40)
-    //     .style("stroke-linejoin", "round")
-    //     .style("opacity", 0.2)
-    //     .attr("d", groupPath);
 
     // doc.each(d => boundMargin(d, width, height, margin));
     // label.each(d => boundMargin(d, width, height, margin));
 
-    var hullpoints = d3.selectAll(".hull");
+    hull.attr("d", groupPath);
+
     doc.attr("transform", d => {
       return "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")";
     });
@@ -928,43 +931,10 @@ d3.json("data.json", function(error, data) {
     marching_squares(svg, groupsById);
   });
 
-  var tp = svg.selectAll(".descr")
-      .data(comps)
-      .enter()
-      .append("text")
-      // .attr("transform", () => "rotate(" + 180 + ")")
-    // .style("direction", "rtl")
-    // .style("unicode-bidi", "bidi-override")
-      .attr("class", "descr")
-      // .attr("word-spacing", "10")
-      // .attr("spacing", "auto")
-      // .attr("font-size", "20")
-      .attr("dy", "-35")
-      // .attr("dx", "360")
-    .append("textPath")
-      .attr("text-anchor", "middle")
-      .attr("startOffset", "50%")
-      // .text("data VIZ")
-      // .attr("text-anchor", "start")
-      // .attr("method", "stretch")
-      // .attr("startOffset", "26%")
-      .attr("alignment-baseline", "text-after-edge")
-      .attr("dominant-baseline", "baseline")
-      .attr("xlink:href", (d, i) => "#co " + d.id);
-      // .data(["sample", "data", "vis", "dat"])
-      // .enter()
-      //
-  tp.selectAll("tspan")
-    .data(["Jan", ", Arndt", ", Nils", ", Babba", ", Kiran", "and many more"])
-    // .data(["Jan"])
-    .enter()
-    .append("tspan")
-    .style("transform", "scale(-1,1)")
-    .attr("font-size", () => 80 )
-    // .attr("transform", () => "rotate(" + (180) + ")")
 
-  .text(d => d+" ")
-    .on("click", d => console.log("click0" + d));
+  doc.on("click", function(d) {
+    console.log("d nodes", d.__setKey__, d.nodes, "shallow", d.shallow);
+    console.log("BBox", this.getBoundingClientRect());
+  });
 
-  doc.on("click", d => console.log("d nodes", d.__setKey__, d.nodes, "shallow", d.shallow));
 });
