@@ -6,25 +6,6 @@ import d3_force from "d3-force";
 import marching_squares from "./marchingSquaresHelpers.js";
 import offsetInterpolate from "./polyOffset.js";
 
-var hullcolor = d3.scale.category20();
-var hullcurve = d3.svg.line()
-  .interpolate("basis-closed")
-  .x(d => d.x)
-  .y(d => d.y);
-
-function calcFontSize(textpath, path) {
-  //  var textpath = document.getElementById("tp");
-  //   var path = document.getElementById("s3");
-  while ((textpath.node().getComputedTextLength()*1.50) > path.node().getTotalLength()) {
-    // TODO: remove last element
-    textpath.selectAll("tspan").attr("font-size", function() {
-      var fontsize = d3.select(this).attr("font-size");
-      fontsize -= 0.01;
-      return fontsize;
-    });
-  }
-}
-
 function reversePath(pathString) {
     var pathPieces = pathString.match(/[MLHVCSQTA][-0-9.,]*/gi);
     var reversed = "";
@@ -62,6 +43,7 @@ function biconnectedComponents(setData){
   var nodes = fg.nodes;
   var links = fg.edges;
 
+
   var vertices = nodes.map(d => d.index);
   var edgeList = _.flatten(links.map(l => {
     var edge = [[l.source, l.target], [l.target, l.source]];
@@ -69,12 +51,12 @@ function biconnectedComponents(setData){
   }));
 
   var adjList = convert_edgelist_to_adjlist(vertices, edgeList);
-  // console.log("vertices", vertices);
-  // console.log("edgelist", edgeList);
-  // console.log("adjList", adjList);
+  console.log("vertices", vertices);
+  console.log("edgelist", edgeList);
+  console.log("adjList", adjList);
 
   var n = Object.keys(adjList).length; // number vertices
-  // console.log("n", n);
+  console.log("n", n);
   var result = [];
   // var m = 10; // number edges
 
@@ -180,12 +162,14 @@ function outputComp(u, v){
 }
 
 var labelLine = d3.svg.line()
-  .x(d => d.x)
-  .y(d => d.y)
-  .interpolate(offsetInterpolate(15));
+  .x(function(d) {
+  return d.x;
+}).y(function(d) {
+  return d.y;
+}).interpolate(offsetInterpolate(30));
 
-var width = 1400;
-var height = 600;
+var width = 1200;
+var height = 800;
 var margin = {
   right: 100,
   left: 100,
@@ -234,7 +218,7 @@ function simple_comp(nodes, links) {
     var edge = [l.source.index, l.target.index];
     return edge;
   });
-  // console.log("edgeList", edgeList);
+  console.log("edgeList", edgeList);
 
   var adjlist = convert_edgelist_to_adjlist(vertices, edgeList);
 
@@ -378,11 +362,9 @@ var bfs = function(v, adjlist, visited) {
   var i, len, adjV, nextVertex;
   q.push(v);
   visited[v] = true;
-  var level = 0;
-  // var max = 10;
-  while (q.length > 0 /* && level <= 50 */) {
+  while (q.length > 0) {
     v = q.shift();
-    current_group.push(v);
+    current_group.push(parseInt(v));
     // Go through adjacency list of vertex v, and push any unvisited
     // vertex onto the queue.
     // This is more efficient than our earlier approach of going
@@ -395,7 +377,6 @@ var bfs = function(v, adjlist, visited) {
         visited[nextVertex] = true;
       }
     }
-    level += 1;
   }
   return current_group;
 };
@@ -493,15 +474,14 @@ var labelPath = function(d) {
 };
 
 
-// var groupFill = function(d, i) { return fill(i & 3); };
+var groupFill = function(d, i) { return fill(i & 3); };
 
 d3.json("diigo.json", function(error, data) {
-  var diigo = data.slice(0, 100).map((d, i)=> {
+  var diigo = data.slice(0, 200).map((d, i)=> {
     d.tags = d.tags.split(",");
     d.id = i;
     return d;
   });
-  console.log("diigo length", diigo.length);
   // diigo = diigo.filter(d => d.tags.indexOf("music") !== -1);
   // console.log("rawData", rawData);
   // const { data: data, edges: edges } = prepareData(rawData.documents);
@@ -530,10 +510,10 @@ d3.json("diigo.json", function(error, data) {
 
      });
 
+
   var svg = d3.select("body").append("svg")
               .attr("width", width)
               .attr("height", height)
-              .attr("overflow", "visible")
               .append("g")
               .attr("transform", "translate(" + [0, 0] + ")")
               .call(zoom);
@@ -589,10 +569,10 @@ d3.json("diigo.json", function(error, data) {
     return g;
   });
 
-  // console.log("foci data", foci.data(), foci.data().length);
-  // console.log("foci links", foci.links());
-  // console.log("force nodes", nodes, "length", nodes.length);
-  // console.log("foci-groups", foci.groups());
+  console.log("foci data", foci.data(), foci.data().length);
+  console.log("foci links", foci.links());
+  console.log("force nodes", nodes, "length", nodes.length);
+  console.log("foci-groups", foci.groups());
 
   var simulation = d3_force.forceSimulation(nodes)
       .force("x", d3_force.forceX(d => d.center.x).strength(1))
@@ -615,8 +595,7 @@ d3.json("diigo.json", function(error, data) {
       });
     });
   }));
-
-  // console.log("forceEdges", forceEdges);
+  console.log("forceEdges", forceEdges);
 
   //
   // // this should look like:
@@ -632,29 +611,29 @@ d3.json("diigo.json", function(error, data) {
   //
   console.log("bicomps", bicomps);
   // console.log("biconnectedComponents", comps);
-  var spreadTags = _.flatten(nodes.map(d => d.tags));
+  // var spreadTags = _.flatten(nodes.map(d => d.tags));
 
   // console.log("spreadTags", spreadTags);
 
-  var allTags = d3.nest()
-    .key(d => d)
-    .entries(spreadTags)
-  .sort((a, b) => d3.descending(a.values.length, b.values.length));
+  // var allTags = d3.nest()
+  //   .key(d => d)
+  //   .entries(spreadTags)
+  // .sort((a, b) => d3.descending(a.values.length, b.values.length));
   //
-  var wordScale = d3.scale.linear()
-      .domain(d3.extent(allTags, d => d.values.length))
-      .rangeRound([7, 50]);
+  // var wordScale = d3.scale.linear()
+  //     .domain(d3.extent(allTags, d => d.values.length))
+  //     .rangeRound([10, 50]);
 
-  var simple_gr = simple_comp(foci.data(), foci.links());
+  var simple_gr = simple_comp(foci.data(), foci.links()).filter(d => d.length > 1);
   // console.log("largest simple group", simple_gr.find(d => d.length > 50).filter(d => d.label));
-  // var complex_gr = bicomps.map(g => {
-  //   return g.map(i => nodes[i]);
-  // });
-  // console.log("bicomps", bicomps);
+  var complex_gr = bicomps.map(g => {
+    return g.map(i => nodes[i]);
+  });
+  console.log("gr", complex_gr);
   // console.log("largest complex group", gr.find(d => d.length > 50).filter(d => d.label));
-  // console.log("simple gr", simple_gr);
+  console.log("simple gr", simple_gr);
 
-  var comps = simple_gr.map((g, i) => {
+  var comps = complex_gr.map((g, i) => {
     var nodes = _.flatten(g.map(d => d.nodes));
     var tags = d3.nest()
       .key(d => d)
@@ -663,7 +642,8 @@ d3.json("diigo.json", function(error, data) {
     .sort((a, b) => d3.descending(a.values.length, b.values.length));
 
     return {
-      id: i + "comp", values: g,
+      id: i + "comp",
+      values: g,
       tags: tags,
       // TODO: check later
       nodes: nodes.filter(d => d)
@@ -671,13 +651,25 @@ d3.json("diigo.json", function(error, data) {
     };
   });
 
-  // console.log("comps", comps);
+  console.log("comps", comps);
 
-
-  // var redComps = bicomps.map(c => c.filter(v => cut_vertices.indexOf(v) === -1));
   //
-  // console.log("redComps", redComps);
-
+  // var cut_vertices = _.uniq(_.flatten(comps.map(c => {
+  //   return c.filter(u => {
+  //     var n = comps.filter(c => c.find(v => v === u) ? true : false);
+  //     return n.length > 1;
+  //   });
+  // }).filter(s => s > 0)));
+  //
+  // // console.log("cut_vertices", cut_vertices);
+  //
+  // nodes.forEach((d, i) => {
+  //   if (cut_vertices.indexOf(i) !== -1 ) d.cut = true;
+  // });
+  //
+  // var redComps = comps.map(c => c.filter(v => cut_vertices.indexOf(v) === -1));
+  //
+  // // console.log("redComps", redComps);
   //
   // var deeperComps = redComps.map(c => {
   //   // console.log("comp", c);
@@ -747,8 +739,7 @@ d3.json("diigo.json", function(error, data) {
       .attr("startOffset", "50%")
       .attr("alignment-baseline", "text-after-edge")
       .attr("dominant-baseline", "baseline")
-      .attr("id", d => "tp-hull" + d.id)
-      .attr("xlink:href", d => "#hull " + d.id);
+      .attr("xlink:href", d => "#" + d.id);
 
   // var tp = lc.selectAll(".descr").select("textPath");
   tp.each(d => {
@@ -758,22 +749,23 @@ d3.json("diigo.json", function(error, data) {
   });
 
   tp.selectAll("tspan")
-    .data(d => d.tags.slice(0, 10))
+    .data(d => d.tags.slice(0, 5))
     .enter()
     .append("tspan")
     .attr("font-size", function(d) {
-      // var wordScale = d3.select(this.parentNode).datum().scale;
+      var wordScale = d3.select(this.parentNode).datum().scale;
       return wordScale(d.values.length);
     })
-  .text(d => d.key+ " · ")
+  .text(d => d.key+" ")
     .on("click", d => console.log("click0", d));
+
 
   var hull = lc
       // .attr("class", "group")
       // .append("path", "circle")
       .insert("path", ":first-child")
       .attr("class", "hull")
-      .attr("id", d => "hull " + d.id)
+      .attr("id", d => d.id)
       .style("fill", fill)
       .style("stroke-linejoin", "round")
       .style("stroke-width", 10)
@@ -783,32 +775,32 @@ d3.json("diigo.json", function(error, data) {
       .attr("d", groupPath)
       .on("click", function() {
         // console.log("BBox", this.getBBox());
-        var bbox = this.getBBox(),
-            dx = bbox.width,
-            dy = bbox.height + 50,
-            x = (bbox.x + bbox.x + bbox.width) / 2 ,
-            y = (bbox.y + bbox.y + bbox.height) / 2,
-            scale = Math.max(1, Math.min(8, 0.9 / Math.max(dx / width, dy / height))),
-            translate = [width / 2 - scale * x, height / 2 - scale * y];
+        var bbox = this.getBBox();
+        svg.append("circle")
+          .attr("cx", bbox.x)
+          .attr("cy", bbox.y)
+          .attr("r", 5)
+          .attr("fill", "red");
 
-          svg.transition()
-             .duration(750)
-             // .style("stroke-width", 1.5 / scale + "px")
-             .attr("transform", "translate(" + translate + ")scale(" + scale + ")");
+        svg.append("circle")
+          .attr("cx", bbox.x + bbox.width)
+          .attr("cy", bbox.y + bbox.height)
+          .attr("r", 5)
+          .attr("fill", "red");
       });
 
-  var circle = svg.selectAll(".circle")
-    .data(foci.data().filter(d => d.cut))
-    .enter()
-    .append("circle")
-      // .attr("transform", d => "translate(" + (-d.width / 2) + "," + (-d.height/ 2) + ")")
-      .attr("class", "circle")
-      .attr("r", 7)
-      .attr("cx", d => d.center.x)
-      .attr("cy", d => d.center.y)
-      .attr("stroke", "red")
-      .attr("stroke-width", 2)
-      .attr("fill",  "none");
+  // var circle = svg.selectAll(".circle")
+  //   .data(foci.data().filter(d => !d.label && d.nodes.length > 0))
+  //   .enter()
+  //   .append("circle")
+  //     // .attr("transform", d => "translate(" + (-d.width / 2) + "," + (-d.height/ 2) + ")")
+  //     .attr("class", "circle")
+  //     .attr("r", 7)
+  //     .attr("cx", d => d.center.x)
+  //     .attr("cy", d => d.center.y)
+  //     .attr("stroke", "black")
+  //     .attr("stroke-width", 0.5)
+  //     .attr("fill",  "none");
 
   var doc = svg.selectAll(".doc")
     .data(nodes.filter(d => !d.label), d => d.id);
@@ -920,23 +912,7 @@ d3.json("diigo.json", function(error, data) {
 
 
 
-  simulation.on("end", function() {
-    hull.each(function(d) {
-      var textpath = d3.select("#tp-hull" + d.id);
-      calcFontSize(textpath, d3.select(this));
-    });
-  });
-
   simulation.on("tick", function() {
-
-    // label.each(d => {
-    //   d.x = Math.max(d.width, Math.min(width - 2, d.x));
-    //   d.y = Math.max(d.height, Math.min(height - 2, d.y));
-    // });
-    // doc.each(d => {
-    //   d.x = Math.max(d.width, Math.min(width - 2, d.x));
-    //   d.y = Math.max(d.height, Math.min(height - 2, d.y));
-    // });
 
     var q2 = d3.geom.quadtree(nodes);
     nodes.forEach(d => {
@@ -952,7 +928,6 @@ d3.json("diigo.json", function(error, data) {
 
     hull.attr("d", groupPath);
 
-
     doc.attr("transform", d => {
       return "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")";
     });
@@ -960,38 +935,23 @@ d3.json("diigo.json", function(error, data) {
       return "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")";
     });
 
-    // link
-    //   .attr("x1", d => d.source.x)
-    //   .attr("y1", d => d.source.y)
-    //   .attr("x2", d => d.target.x)
-    //   .attr("y2", d => d.target.y);
+    link
+      .attr("x1", d => d.source.x)
+      .attr("y1", d => d.source.y)
+      .attr("x2", d => d.target.x)
+      .attr("y2", d => d.target.y);
 
+  // node.attr("cx", function(d) {
+  //   return d.x = Math.max(r, Math.min(width - r, d.x));
+  // })
+  // .attr("cy", function(d) {
+  //   return d.y = Math.max(r, Math.min(height - r, d.y));
+  // });
     // doc.attr("transform", function(d) { return "rotate(" + (d.x - 90) + ")translate(" + d.y + ")"; })
     // doc.attr("x", d => d.x - d.width / 2 );
     // doc.attr("y", d => d.y - d.width / 2 );
 
-
-    marching_squares((group, array) => {
-
-      svg.select(".bubble-cont").selectAll(".bubble-"+group.key).remove();
-
-      svg.select(".bubble-cont")
-         .selectAll(".bubble-"+group.key)
-          .data(array)
-            // .attr("d", function(d){ return curve(d); })
-          .enter()
-          .append("g")
-          .insert("path", ":first-child")
-          .attr("class", "bubble-"+group.key)
-            // .attr("id", (d, i) => "co" + i)
-            .attr("d", function(d){ return hullcurve(d); })
-             .attr("fill", hullcolor(group.key))
-             // .attr("stroke", "black")
-             // .attr("stroke-width", "20px")
-             // .attr("stroke-linejoin", "round")
-             .attr("opacity", 0.5);
-       }, groupsById);
-
+    marching_squares(svg, groupsById);
   });
 
 
