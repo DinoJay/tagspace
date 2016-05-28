@@ -1,14 +1,14 @@
 import _ from "lodash";
 import d3 from "d3";
 
-var color = d3.scale.category20();
+// var color = d3.scale.category20();
 
-var cell_size = 10;
+var cell_size = 5;
 var isolevel = 0.0250;
 var epsilon = 0.00000001;
 var grid = {
-  width: 2800,
-  height: 1200
+  width: 1400 * 2,
+  height: 800 * 2
 };
 
 var set = []; //the current set for the bubble
@@ -138,7 +138,7 @@ function polygonize(cell, isolevel) {
 //graph.nodes dependence
 function threshold(x, y){
   var f = 0;
-  for ( var i = 0; i < set.length; i++ ) {
+  for (var i = 0; i < set.length; i++) {
     var d = Math.sqrt(Math.pow(set[i].x - x, 2) + Math.pow(set[i].y - y, 2));
     var g_force = 1 / Math.pow(d, 2);
     f += g_force;
@@ -198,10 +198,9 @@ function draw_marching_squares(callback, groups) {
                id: "i"+i+"j"+j+"k"+k+"g"+g.key,
                group: g.key
              });
-
           }
         } //if(cell)
-        else{
+        else {
           tetriscells.push({
             x: cell.x,
             y: cell.y,
@@ -228,73 +227,15 @@ function draw_marching_squares(callback, groups) {
       .domain(opacityExtent)
       .range(tetrisOpacityRange);
 
-    // if(iterationOfMarchingSquares == 0){
-    //
-    // selectTetrisCells = d3.select(".marchingRectGroup")
-    //   .selectAll(".tetriscells")
-    //   .data(tetriscells)
-    //         .enter()
-    //         .append("rect")
-    //           .attr("class","tetriscells")
-    //           .attr("fill", () => color(g))
-    //           .attr("opacity", d => tetrisOpacityMap(d.val))
-    //            .attr("rx","2")
-    //            .attr("ry","2")
-    //             .attr("x", d => d.x)
-    //             .attr("y", d => d.y)
-    //             .attr("width", cell_size)
-    //             .attr("height", cell_size);
-    // }else{
-    //
-    // selectTetrisCells = selectTetrisCells.data(tetriscells, function(d) { return d.x +"-"+ d.y; });
-    //
-    // selectTetrisCells
-    //             .enter()
-    //             .append("rect")
-    //               .attr("class","tetriscells")
-    //               .attr("fill",function(d) { return color(g); })
-    //               .attr("opacity",function(d) { return tetrisOpacityMap(d.val); })
-    //                .attr("rx","2")
-    //                .attr("ry","2")
-    //                 .attr("x",function(d,i){return d.x;})
-    //                 .attr("y",function(d,i){return d.y;})
-    //                 .attr("width",cell_size)
-    //                 .attr("height",cell_size)
-    // }
-
-
     iterationOfMarchingSquares += 1;
 
-    // var filteredPoints = bubblePoints.filter(function(x){
-    //   return x.group === g.key;
-    // });
-    //
-    // groupedPoints.push(filteredPoints);
-    // console.log("bubblePoints", bubblePoints);
     var sortedBubblePoints = sortBubblePoints(bubblePoints);
 
     var arrayOfArrays = splitSortedBubblePoints(sortedBubblePoints);
 
-    callback(g, arrayOfArrays);
+    g.d = arrayOfArrays;
+    callback(g);
 
-    // var curve = d3.svg.line()
-    //       .interpolate("basis-closed")
-    //        .x(function(d) { return d.x; })
-    //        .y(function(d) { return d.y; });
-
-
-      // svg.select(".bubble-cont")
-      //     .selectAll("g")
-      //     .append("text")
-      //     // .attr("id", "curve-text")
-      //   .append("textPath")
-      //     .attr("xlink:href", (d, i) => "#co" + i)
-      //     .text("We go up, then we go down, then up again.");
-      //   // .append("path")
- // }
-
-
-    // prevArrayOfArraysLength[g.key] = arrayOfArrays.length;
   }); // g
 
   return groupedPoints;
@@ -341,7 +282,8 @@ function splitSortedBubblePoints(sortedBubblePoints){
     var thresholdDist = computeDistance({x:cell_size,y:cell_size},{x:0,y:0});
     for (var i = 0; i < sortedBubblePoints.length - 1; i++){
 
-        if (computeDistance(sortedBubblePoints[i], sortedBubblePoints[i+1]) > thresholdDist){
+        if (computeDistance(sortedBubblePoints[i],
+            sortedBubblePoints[i+1]) > thresholdDist){
             subSets.push(sortedBubblePoints.slice(lastSplit, i));
             lastSplit = i+1;
         }

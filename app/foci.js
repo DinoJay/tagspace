@@ -6,20 +6,9 @@ import d3_hierarchy from "d3-hierarchy";
 
 function crop_graph(nodes, links) {
 
-  var delVertices = [];
+  var delEdges = [];
   var visited = {};
   var v;
-
-  // this should look like:
-  // {
-  //   "a2": ["a5"],
-  //   "a3": ["a6"],
-  //   "a4": ["a5"],
-  //   "a5": ["a2", "a4"],
-  //   "a6": ["a3"],
-  //   "a7": ["a9"],
-  //   "a9": ["a7"]
-  // }
 
   var vertices = nodes.map(d => d.index);
   var edgeList = links.map(l => {
@@ -39,6 +28,7 @@ function crop_graph(nodes, links) {
     visited[v] = true;
     var level = 0;
     var max = 10;
+    var delEdges = [];
     var delVertices = [];
     while (q.length > 0 && level <= max) {
       v = q.shift();
@@ -50,6 +40,9 @@ function crop_graph(nodes, links) {
       adjV = adjlist[v];
 
       if (level === max) {
+        delEdges.push(...adjV.map(u => {
+          return {source: v, target: u};
+        }));
         delVertices.push(...adjV);
       }
 
@@ -62,16 +55,16 @@ function crop_graph(nodes, links) {
       }
       level += 1;
     }
-    return delVertices;
+    return delEdges;
   };
 
   for (v in adjlist) {
     if (adjlist.hasOwnProperty(v) && !visited[v]) {
-      var indices = bfs(v, adjlist, visited);
-      delVertices.push(...indices);
+      var edges = bfs(v, adjlist, visited);
+      delEdges.push(...edges);
     }
   }
-  return _.uniq(delVertices);
+  return delEdges;
 }
 
 function biconnectedComponents(setData){
@@ -111,7 +104,6 @@ function biconnectedComponents(setData){
   }
 
   return result.map(g => _.uniq(g));
-
 
   function dfsVisit(u){
     visited[u] = true;
@@ -231,13 +223,13 @@ function deriveGroups(nodes) {
   var labelNodes = nodes.filter(d => d.label);
 
   var spread_data = _.flatten(realNodes.map(n => {
-      var clones = n.sets.map(t => {
-        var clone = _.cloneDeep(n);
-        clone.tag = t;
-        return clone;
-      }).filter(d => d.__key__ !== "root");
-      return clones;
-    }));
+    var clones = n.sets.map(t => {
+      var clone = _.cloneDeep(n);
+      clone.tag = t;
+      return clone;
+    }).filter(d => d.__key__ !== "root");
+    return clones;
+  }));
 
   var nested_data = d3.nest()
     .key(d => d.tag)
@@ -255,28 +247,29 @@ function deriveGroups(nodes) {
     return g;
   });
 
-  var sortedGroups = _.sortBy(groups, g => g.values.length).reverse();
+  // var sortedGroups = _.sortBy(groups, g => g.values.length).reverse();
 
   // console.log("sortedGroups", sortedGroups);
 
-  sortedGroups.forEach(g => {
-    labelNodes.forEach(l => {
-      // var sameParent = g.values.find(v => {
-      //   return v.parent && v.parent.__key__ === l.parent.__key__;
-      // });
+  labelNodes.forEach(l => {
+    var bool = false;
+    groups.forEach(g => {
       if (l.interSet.indexOf(g.key) !== -1) {
         // l.text = g.id;
+        // TODO: dirty hack, fix this
+        // l.id = g.id + " label";
+        // console.log("label with group!");
         g.values.push(l);
       }
-    // d.values = d.values.map(d => d.data);
+      else bool = true;
+      // else console.log("label without group!");
     });
+    console.log("label group", bool);
   });
 
   // groups.forEach(d => {
   //   d.values = d.values.map(d => d.data);
   // });
-
-  this._groups = groups;
 
   return groups;
 }
@@ -347,11 +340,12 @@ function start() {
 
     var simulation = d3_force.forceSimulation(nodes)
       .force("charge", d3_force.forceManyBody()
-                         .strength(d => d.label ? -5 : d.nodes.length * -10)
-                         // .distanceMin(d => !d.label ? -100 : 0)
+                         .strength(-20)
+                         .distanceMin(10)
+                         .distanceMax(200)
       )
       .force("link", d3_force.forceLink()
-                             .distance(l => l.target.label ? 3 : 9)
+                             .distance(l => l.target.label ? 1 : 9)
                              .strength(1)
                              .iterations(4))
       // .force("position", d3_force.forcePosition());
@@ -373,20 +367,29 @@ function start() {
       linkedByIndex[l.source + "," + l.target] = l;
     });
 
-    var labelNodes = nodes.filter(n => isParent(n, linkedByIndex))
-        .map((n, i)=> {
+    var labelNodes = _.flatten(nodes.filter(n => isParent(n, linkedByIndex))
+        .map(n => {
           var links = outLinks(n, nodes, linkedByIndex);
           var interSet = links[0].interSet;
-          return {
-            id: n.__key__ + "label",
-            index: nodes.length + i,
-            label: true,
-            text: interSet.join(", "),
-            interSet: interSet,
-            tags: interSet,
-            parent: n
-          };
-        });
+          // return interSet.map(s => {
+            return {
+              id: n.__key__ + "label ", //+ s,
+              // index: nodes.length + index,
+              label: true,
+              text: interSet.join(", "), //s,
+              interSet: interSet,
+              tags: interSet,
+              parent: n
+            };
+            // index += 1;
+          // });
+        }));
+
+    // var uniqLabelNodes = _.uniq(labelNodes, d => d.id);
+
+    labelNodes.forEach((d, i) => d.index = nodes.length + i);
+
+    console.log("LABELNODES", labelNodes);
     var labelLinks = labelNodes.map(n => {
       return {source: n.parent.index, target: n.index};
     });
@@ -431,7 +434,7 @@ function start() {
       simulation.tick();
     }
 
-    var gs = that.groups(nodes);
+    that._groups = deriveGroups(nodes);
     // that._groups = gs;
 
     // console.log("GS", gs);
@@ -654,22 +657,32 @@ function initSets(data) {
 
   var bicomps = _.sortBy(biconnectedComponents(setData), d => d.length).reverse();
 
-  var bicut_vertices = _.uniq(_.flatten(bicomps.map(c => {
+  var bicut_edges = _.flatten(bicomps.map(c => {
     return c.filter(u => {
-      var n = bicomps.filter(c => c.find(v => v === u));
-      return n.length > 1;
+      var targets = bicomps.filter(c => c.find(v => v === u));
+      // return n.length > 1;
+      return targets.map(t => {
+        return {source: u, target: t};
+      });
     });
-  }).filter(s => s > 0)));
+  }).filter(s => s > 0));
 
+
+  console.log("bicut edges", bicut_edges);
   console.log("bicomps", bicomps);
-  console.log("cut_vertices", bicut_vertices);
+  // console.log("cut_vertices", bicut_vertices);
 
   // console.log("delEdges", delEdges, "del len", delEdges.length, "edges", edges.length);
 
   // TODO: check later
   // var delEdges = edges.filter(e => cut_vertices.indexOf(e.target) === -1);
-  var cut_vertices = crop_graph(nodes, edges);
-  cut_vertices.push(...bicut_vertices);
+  var cut_edges = crop_graph(nodes, edges);
+  cut_edges.push(...bicut_edges);
+
+  var cut_vertices = _.flatten(cut_edges
+    .map(e => [e.source, e.target]));
+
+  console.log("cut_edges", cut_edges);
 
   var delEdges = edges.filter(e => cut_vertices.indexOf(e.target) === -1);
 
@@ -678,7 +691,7 @@ function initSets(data) {
     if (cut_vertices.indexOf(i) !== -1 ) d.cut = true;
   });
 
-  console.log("Biconnected COmps", bicomps);
+  // console.log("Biconnected COmps", bicomps);
 
   this._sets = nodes;
 
