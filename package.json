@@ -37,6 +37,7 @@
     "lodash": "^4.0.1",
     "raphael": "^2.2.0",
     "simplify-js": "^1.2.1",
+    "snapsvg": "^0.4.0",
     "svg-path-parser": "^1.0.1",
     "webcola": "git://github.com/tgdwyer/WebCola#master"
   },

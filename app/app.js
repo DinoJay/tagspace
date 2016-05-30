@@ -6,12 +6,19 @@ import d3_force from "d3-force";
 import marching_squares from "./marchingSquaresHelpers.js";
 import offsetInterpolate from "./polyOffset.js";
 
+import edgeBundling from "./edgebundling.js";
+
 var hullcolor = d3.scale.category20();
 
 var hullcurve = d3.svg.line()
   .interpolate("basis-closed")
   .x(d => d.x)
   .y(d => d.y);
+
+var bundleLine = d3.svg.line()
+            .x(d => d.x)
+            .y(d => d.y)
+            .interpolate("monotone");
 
 
 function cropHullLabels(d, path) {
@@ -50,16 +57,16 @@ var labelLine = d3.svg.line()
   .y(d => d.y)
   .interpolate(offsetInterpolate(15));
 
-var overflow = {left: 0, bottom: 0};
-var width = window.innerWidth + overflow.left;
-var height = window.innerHeight + overflow.bottom;
+var width = 1400;//window.innerWidth;
+var height = 600;//window.innerHeight;
 
-var margin = {
-  right: 100,
-  left: 100,
-  top: 100,
-  bottom: 100
+var viewBox = {
+  left: 0,
+  top: 500
 };
+
+var shiftedHeight = height + viewBox.top;
+var shiftedWidth = width + viewBox.top;
 
 function boundMargin(node, width, height, margin) {
   var halfHeight = node.height / 2,
@@ -75,8 +82,8 @@ function boundMargin(node, width, height, margin) {
   if (node.y - halfHeight < margin.top) {
           node.y = halfHeight + margin.top;
   }
-  if (node.y + halfHeight > (height - margin.bottom)) {
-          node.y = (height - margin.bottom) - halfHeight;
+  if (node.y + halfHeight > (height - margin.top)) {
+          node.y = (height - margin.top) - halfHeight;
   }
   return node;
 }
@@ -364,7 +371,7 @@ var labelPath = function(d) {
 // var groupFill = function(d, i) { return fill(i & 3); };
 
 d3.json("diigo.json", function(error, data) {
-  var diigo = data.slice(0, 400).map((d, i)=> {
+  var diigo = data.slice(0, 100).map((d, i)=> {
     d.tags = d.tags.split(",");
     d.id = i;
     return d;
@@ -378,7 +385,7 @@ d3.json("diigo.json", function(error, data) {
   // data.documents.forEach(d => d.r = 12);
 
   var zoom = d3.behavior.zoom()
-     .size(width, height)
+     .size(shiftedWidth, shiftedHeight)
      .scaleExtent([-10, 40])
      .on("zoom", () => {
         console.log("zoom", d3.event);
@@ -400,10 +407,11 @@ d3.json("diigo.json", function(error, data) {
   var svg = d3.select("body").append("svg")
               .attr("width", width)
               .attr("height", height)
-              // .attr("viewBox", viewBox.left + " " + viewBox.bottom + " " + (width - viewBox.left) + " " + (height - viewBox.bottom))
-              .attr("overflow", "hidden")
+              // .attr("viewBox", 0 + " " + 200 + " " + width + " " + height)
+              .attr("viewBox", (viewBox.left ) + " " + (viewBox.top ) + " " + (width - viewBox.left) + " " + (height - viewBox.top))
+              .attr("overflow", "visible")
               .append("g")
-              // .attr("viewBox", (-viewBox.left ) + " " + (-viewBox.bottom ) + " " + (width - viewBox.left) + " " + (height - viewBox.bottom))
+              // .attr("viewBox", (-viewBox.left ) + " " + (-viewBox.top ) + " " + (width - viewBox.left) + " " + (height - viewBox.top))
                 // .attr("transform", "translate(200, 200)")
                 .attr("overflow", "visible")
                 // .attr("transform", "translate(" + [0, 0] + ")")
@@ -413,27 +421,28 @@ d3.json("diigo.json", function(error, data) {
   // svg.attr("transform", "scale(0.5)");
   // var elmnt = d3.select("svg").node();
 
-  window.scrollTo(overflow.left, overflow.bottom ) ;
+  // window.scrollTo(overflow.left, overflow.top ) ;
 
+  // TODO: update
   var foci = fociLayout()
                 .gravity(0.01)
                 .sets(diigo)
-                .size([width, height])
-                .charge(function(d) {
+                .size([width, height + viewBox.top])
+                .charge(function() {
                   // var conn = this.hasConnections(d);
                   // return conn > 0 ? -100 / conn : -100;
                   // return - d.nodes.length * 40;
                   return -20;
                 })
                 .linkStrength(l => l.target.label ? 0: 0)
-                .linkDistance(function(l){
+                .linkDistance(function(){
                   // var conn = this.connections(l.source);
                   return 7;
                 })
                 .start();
 
   var nodes = _.flatten(foci.data().map(d => {
-    // TODO
+    // TODO: not really clean
     if (d.label) return d;
     return d.nodes.map(e => {
       e.center = d.center;
@@ -475,6 +484,8 @@ d3.json("diigo.json", function(error, data) {
       // )
       .alphaMin(0.3);
 
+  console.log("cutEdges", cutEdges);
+  console.log("bundledEdgeSegments", bundledEdgeSegments);
   // var forceEdges = _.flattenDeep(foci.links().filter(l => l.source.nodes && l.target.nodes).map(l => {
   //   return l.source.nodes.map(s => {
   //     return l.target.nodes.map(t => {
@@ -499,7 +510,7 @@ d3.json("diigo.json", function(error, data) {
 
   // console.log("adjList", adjList);
 
-  var bicomps = foci.bicomps();
+  // var bicomps = foci.bicomps();
   //
   // console.log("bicomps", bicomps);
   // console.log("biconnectedComponents", comps);
@@ -516,7 +527,7 @@ d3.json("diigo.json", function(error, data) {
       .domain(d3.extent(allTags, d => d.values.length))
       .rangeRound([7, 50]);
 
-  var simple_gr = simple_comp(foci.data(), foci.links());
+  var simple_gr = simple_comp(foci.data(), foci.reducedEdges());
   // console.log("largest simple group", simple_gr.find(d => d.length > 50).filter(d => d.label));
   // var complex_gr = bicomps.map(g => {
   //   return g.map(i => nodes[i]);
@@ -541,6 +552,17 @@ d3.json("diigo.json", function(error, data) {
       // nodes: g
     };
   });
+
+  var cutEdges = foci.cutEdges();
+  var fbundling = edgeBundling()
+                  .step_size(0.3)
+                  .compatibility_threshold(0.01)
+                  .nodes(foci.data())
+                  .edges(cutEdges.map(e => {
+                    return {source: e.source.index, target: e.target.index};
+                  }));
+
+  var bundledEdgeSegments   = fbundling();
 
   // console.log("comps", comps);
 
@@ -601,28 +623,33 @@ d3.json("diigo.json", function(error, data) {
   //     .attr("stroke-width", "2")
   //     .attr("fill", "orange");
 
-  var boundzoom = function() {
+  var boundzoom = function(d) {
     var bbox = this.getBBox(),
       dx = bbox.width,
       dy = bbox.height + 50,
-      x = (bbox.x + bbox.x + bbox.width) / 2 ,
+      x = (bbox.x + bbox.x + bbox.width) / 2,
       y = (bbox.y + bbox.y + bbox.height) / 2,
       scale = Math.max(1, Math.min(8, 0.9 / Math.max(dx / width, dy / height))),
-      translate = [width / 2 - scale * x, height / 2 - scale * y];
+      translate = [width / 2 - scale * x, (height + viewBox.top) / 2 - scale * y];
+
+    // d3.select(this).attr("stroke", 0);
+    console.log("hull", d);
+    // var hullDocs = doc.filter(e => d.nodes.find(n => n.id === e.id));
+    // console.log("hullDocs", hullDocs);
 
     svg.transition()
-    .duration(750)
-    // .style("stroke-width", 1.5 / scale + "px")
-    .attr("transform", "translate(" + translate + ")scale(" + scale + ")");
+      .duration(750)
+      // .style("stroke-width", 1.5 / scale + "px")
+      .attr("transform", "translate(" + translate + ")scale(" + scale + ")");
   };
 
   var zoomRect = function(d) {
-    var dx = d.width,
-      dy = d.height,
-      x = d.x,
+    // var dx = d.width,
+    //   dy = d.height,
+    var x = d.x,
       y = d.y,
       scale = 150,//Math.max(1, Math.min(8, 0.9 / Math.max(dx / width, dy / height))),
-      translate = [width / 2 - scale * x, height / 2 - scale * y];
+      translate = [shiftedWidth / 2 - scale * x, shiftedHeight / 2 - scale * y];
 
     svg.transition()
     .duration(750)
@@ -634,7 +661,7 @@ d3.json("diigo.json", function(error, data) {
   var lc = svg.append("g")
       .attr("class", "hull-labels")
       .selectAll(".label-cont")
-      .data(comps);
+      .data(foci.comps());
 
   var lcEnter = lc.enter();
 
@@ -762,6 +789,7 @@ d3.json("diigo.json", function(error, data) {
 
     d3.select(this).select("text")
       .attr("dy", d.height);
+
     d3.select(this)
       .insert("rect", ":first-child")
       .attr("fill", "none")
@@ -788,7 +816,7 @@ d3.json("diigo.json", function(error, data) {
         .on("click", d => console.log(d));
 
   var link = svg.selectAll(".link")
-               .data(foci.links());
+               .data(foci.cutEdges().filter(e => e.target.outLinks.length > 0));
 
   // build the arrow.
   // svg.append("svg:defs").selectAll("marker")
@@ -804,16 +832,24 @@ d3.json("diigo.json", function(error, data) {
   //   .append("svg:path")
   //     .attr("d", "M0,-5L10,0L0,5");
 
-  // link.enter().insert("line", ":first-child")
-  //              //    .attr("class", function(d) { return "link " + d.type; })
-  //              .attr("class", "link")
-  //              .attr("marker-end", "url(#end)");
 
 
 
   simulation.on("end", function() {
     hull.each(function(d) {
       cropHullLabels(d, d3.select(this));
+    });
+
+    bundledEdgeSegments.forEach( d => {
+    // for each of the arrays in the results
+    // draw a line between the subdivions points for that edge
+        svg
+          .append("path")
+            .style("stroke-width", 1)
+            .style("stroke", "#ff2222")
+            .style("fill", "none")
+            .style("stroke-opacity", 0.5) //use opacity as blending
+          .attr("d", bundleLine(d));
     });
 
     marching_squares(group => {
@@ -823,6 +859,7 @@ d3.json("diigo.json", function(error, data) {
          .selectAll(".bubble-"+group.key)
           .data(group.d, d => d.id);
 
+      // console.log("group d", group.d);
             // .attr("d", function(d){ return curve(d); })
       bubble.enter()
         // .insert("path", ":first-child")
@@ -836,9 +873,9 @@ d3.json("diigo.json", function(error, data) {
         .attr("d", d => hullcurve(d))
         .attr("fill", hullcolor(group.key))
         .on("click", boundzoom)
-        .on("mouseover", function() {
+        .on("mouseover", function(d) {
           d3.select(this).attr("opacity", 1);
-          console.log("d", group);
+          console.log("d", d);
         })
         .on("mouseout", function() {
           d3.select(this).attr("opacity", 0.5);
@@ -847,7 +884,21 @@ d3.json("diigo.json", function(error, data) {
       bubble.exit().remove();
 
       }, groupsById);
-  });
+
+
+
+    // link.enter()
+    //   .insert("line", ":first-child")
+    //   // .append("line")
+    //   //    .attr("class", function(d) { return "link " + d.type; })
+    //   .attr("class", "link")
+    //   .attr("opacity", 0.3)
+    //   // .attr("marker-end", "url(#end)");
+    //   .attr("x1", d => d.source.x)
+    //   .attr("y1", d => d.source.y)
+    //   .attr("x2", d => d.target.x)
+    //   .attr("y2", d => d.target.y);
+    });
 
   simulation.on("tick", function() {
 
@@ -886,11 +937,6 @@ d3.json("diigo.json", function(error, data) {
       return "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")";
     });
 
-    // link
-    //   .attr("x1", d => d.source.x)
-    //   .attr("y1", d => d.source.y)
-    //   .attr("x2", d => d.target.x)
-    //   .attr("y2", d => d.target.y);
 
     // doc.attr("transform", function(d) { return "rotate(" + (d.x - 90) + ")translate(" + d.y + ")"; })
     // doc.attr("x", d => d.x - d.width / 2 );

@@ -185,7 +185,7 @@ function draw_marching_squares(callback, groups) {
           //   });
           // }
 
-          for ( var k = 0; k < segments.length; k++ ) {
+          for (var k = 0; k < segments.length; k++ ) {
              bubblePoints.push({
                x: segments[k].b.x,
                y: segments[k].b.y,
