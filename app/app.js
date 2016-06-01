@@ -18,8 +18,66 @@ var hullcurve = d3.svg.line()
 var bundleLine = d3.svg.line()
             .x(d => d.x)
             .y(d => d.y)
-            .interpolate("monotone");
+            .interpolate("linear");
 
+
+// function force(alpha) {
+//   for (var i = 0, n = nodes.length, node, k = alpha * 0.1; i < n; ++i) {
+//     node = nodes[i];
+//     node.vx -= node.x * k;
+//     node.vy -= node.y * k;
+//   }
+// }
+
+function rectCircleColliding(circle, rect, init){
+// var distX = Math.abs(circle.x - rect.x);
+// var distY = Math.abs(circle.y - rect.y);
+
+var center = {
+    x: circle.x - (rect.x),
+    y: circle.y - (rect.y)
+};
+
+// check circle position inside the rectangle quadrant
+var side = {
+    x: Math.abs (center.x) - rect.width / 2,
+    y: Math.abs (center.y) - rect.height / 2
+  };
+
+
+// if (side.x < circle.r && side.y < circle.r) {
+//   console.log("side", side);
+//   // return { bounce: false };
+// } // inside
+
+if (side.x > circle.r) return { bounce: false };
+if (side.y > circle.r) return { bounce: false };
+
+
+var dx = 0, dy = 0;
+if (side.x <= 0 || side.y <=0) {
+  if (Math.abs (side.x) < circle.r && side.y < 0)
+  {
+    dx = center.x*side.x < 0 ? 1 : -1;
+  }
+  else if (Math.abs (side.y) < circle.r && side.x < 0)
+  {
+    dy = center.y*side.y < 0 ? 1 : -1;
+  }
+
+  return { bounce: init, x:dx, y:dy };
+}
+
+// circle is near the corner
+var bounce = side.x*side.x + side.y*side.y  < circle.r*circle.r;
+if (!bounce) return { bounce:false };
+
+var norm = Math.sqrt (side.x*side.x+side.y*side.y);
+dx = center.x < 0 ? 1 : -1;
+dy = center.y < 0 ? 1 : -1;
+return { bounce:true, x: dx*side.x/norm, y: dy*side.y/norm };
+
+}
 
 function cropHullLabels(d, path) {
   //  var textpath = document.getElementById("tp");
@@ -88,39 +146,39 @@ function boundMargin(node, width, height, margin) {
   return node;
 }
 
-function simple_comp(nodes, links) {
-  var groups = [];
-  var visited = {};
-  var v;
-
-  // this should look like:
-  // {
-  //   "a2": ["a5"],
-  //   "a3": ["a6"],
-  //   "a4": ["a5"],
-  //   "a5": ["a2", "a4"],
-  //   "a6": ["a3"],
-  //   "a7": ["a9"],
-  //   "a9": ["a7"]
-  // }
-
-  var vertices = nodes.map(d => d.index);
-  var edgeList = links.map(l => {
-    var edge = [l.source.index, l.target.index];
-    return edge;
-  });
-  // console.log("edgeList", edgeList);
-
-  var adjlist = convert_edgelist_to_adjlist(vertices, edgeList);
-
-  for (v in adjlist) {
-    if (adjlist.hasOwnProperty(v) && !visited[v]) {
-      var indices = bfs(v, adjlist, visited);
-      groups.push(indices.map(i => nodes[i]));
-    }
-  }
-  return groups.map(g => g.filter(d => d));
-}
+// function simple_comp(nodes, links) {
+//   var groups = [];
+//   var visited = {};
+//   var v;
+//
+//   // this should look like:
+//   // {
+//   //   "a2": ["a5"],
+//   //   "a3": ["a6"],
+//   //   "a4": ["a5"],
+//   //   "a5": ["a2", "a4"],
+//   //   "a6": ["a3"],
+//   //   "a7": ["a9"],
+//   //   "a9": ["a7"]
+//   // }
+//
+//   var vertices = nodes.map(d => d.index);
+//   var edgeList = links.map(l => {
+//     var edge = [l.source.index, l.target.index];
+//     return edge;
+//   });
+//   // console.log("edgeList", edgeList);
+//
+//   var adjlist = convert_edgelist_to_adjlist(vertices, edgeList);
+//
+//   for (v in adjlist) {
+//     if (adjlist.hasOwnProperty(v) && !visited[v]) {
+//       var indices = bfs(v, adjlist, visited);
+//       groups.push(indices.map(i => nodes[i]));
+//     }
+//   }
+//   return groups.map(g => g.filter(d => d));
+// }
 
 function collide(node, padding, energy) {
     return function(quad) {
@@ -371,7 +429,7 @@ var labelPath = function(d) {
 // var groupFill = function(d, i) { return fill(i & 3); };
 
 d3.json("diigo.json", function(error, data) {
-  var diigo = data.slice(0, 100).map((d, i)=> {
+  var diigo = data.slice(0, 200).map((d, i)=> {
     d.tags = d.tags.split(",");
     d.id = i;
     return d;
@@ -477,6 +535,20 @@ d3.json("diigo.json", function(error, data) {
   var simulation = d3_force.forceSimulation(nodes)
       .force("x", d3_force.forceX(d => d.center.x).strength(1))
       .force("y", d3_force.forceY(d => d.center.y).strength(1))
+      // .force("centerCircle", function(alpha) {
+        // for (var i = 0, n = nodes.length, k = alpha ; i < n; ++i) {
+        //   var d = nodes[i];
+        //   // node.vx -= node.x * k;
+        //   // node.vy -= node.y * k;
+        //   var circle={x: shiftedWidth/2, y: shiftedHeight/2, r: 300};
+        //   var collision = rectCircleColliding(circle, d, false);
+        //   if (collision.bounce) {
+        //     d.vx = d.x + (collision.x) * ( k / 10000 );
+        //     d.vy = d.y + (collision.y) * ( k / 10000 );
+        //   }
+        // }
+
+      // });
       // .force("charge", d3_force.forceManyBody()
       //                          .theta(2)
       //                          .strength(2)
@@ -484,8 +556,6 @@ d3.json("diigo.json", function(error, data) {
       // )
       .alphaMin(0.3);
 
-  console.log("cutEdges", cutEdges);
-  console.log("bundledEdgeSegments", bundledEdgeSegments);
   // var forceEdges = _.flattenDeep(foci.links().filter(l => l.source.nodes && l.target.nodes).map(l => {
   //   return l.source.nodes.map(s => {
   //     return l.target.nodes.map(t => {
@@ -522,12 +592,12 @@ d3.json("diigo.json", function(error, data) {
     .key(d => d)
     .entries(spreadTags)
   .sort((a, b) => d3.descending(a.values.length, b.values.length));
-  //
+
   var wordScale = d3.scale.linear()
       .domain(d3.extent(allTags, d => d.values.length))
       .rangeRound([7, 50]);
 
-  var simple_gr = simple_comp(foci.data(), foci.reducedEdges());
+  // var simple_gr = simple_comp(foci.data(), foci.reducedEdges());
   // console.log("largest simple group", simple_gr.find(d => d.length > 50).filter(d => d.label));
   // var complex_gr = bicomps.map(g => {
   //   return g.map(i => nodes[i]);
@@ -536,92 +606,27 @@ d3.json("diigo.json", function(error, data) {
   // console.log("largest complex group", gr.find(d => d.length > 50).filter(d => d.label));
   // console.log("simple gr", simple_gr);
 
-  var comps = simple_gr.map((g, i) => {
-    var nodes = _.flatten(g.map(d => d.nodes));
-    var tags = d3.nest()
-      .key(d => d)
-      // TODO: check it later
-      .entries(_.flatten(nodes.filter(d => d).map(d => d.tags)))
-    .sort((a, b) => d3.descending(a.values.length, b.values.length));
-
-    return {
-      id: i + "comp", values: g,
-      tags: tags,
-      // TODO: check later
-      nodes: nodes.filter(d => d)
-      // nodes: g
-    };
-  });
-
-  var cutEdges = foci.cutEdges();
-  var fbundling = edgeBundling()
-                  .step_size(0.3)
-                  .compatibility_threshold(0.01)
-                  .nodes(foci.data())
-                  .edges(cutEdges.map(e => {
-                    return {source: e.source.index, target: e.target.index};
-                  }));
-
-  var bundledEdgeSegments   = fbundling();
-
-  // console.log("comps", comps);
-
-
-  // var redComps = bicomps.map(c => c.filter(v => cut_vertices.indexOf(v) === -1));
+  // var comps = simple_gr.map((g, i) => {
+  //   var nodes = _.flatten(g.map(d => d.nodes));
+  //   var tags = d3.nest()
+  //     .key(d => d)
+  //     // TODO: check it later
+  //     .entries(_.flatten(nodes.filter(d => d).map(d => d.tags)))
+  //   .sort((a, b) => d3.descending(a.values.length, b.values.length));
   //
-  // console.log("redComps", redComps);
-
-  //
-  // var deeperComps = redComps.map(c => {
-  //   // console.log("comp", c);
-  //   var compLinks = edgeList.filter(l => c.indexOf(l[0]) !== -1 && c.indexOf(l[1]) !== -1);
-  //   // console.log("compLinks", compLinks);
-  //   var adjList = convert_edgelist_to_adjlist(vertices, compLinks);
-  //   // console.log("adjlist", adjList);
-  //   return biconnectedComponents(adjList);
+  //   return {
+  //     id: i + "comp", values: g,
+  //     tags: tags,
+  //     // TODO: check later
+  //     nodes: nodes.filter(d => d)
+  //     // nodes: g
+  //   };
   // });
-  // // console.log("deeper comps", deeperComps);
-  //
-  // var groups = [];
-  // var visited = {};
-  // var v;
-  // for (v in adjList) {
-  //   if (adjList.hasOwnProperty(v) && !visited[v]) {
-  //     groups.push(bfs(v, adjList, visited));
-  //   }
-  // }
-  // // TODO: fix later
-  // groups = groups.map(g => g.map(n => parseInt(n)));
-  // // console.log("groups", groups);
-  //
-  // var groupedNodes = groups.map(g => g.map(i => nodes[parseInt(i)]));
-  // var compNodes = redComps.map(c => c.map(i => nodes[i]));
-  //
-  // // console.log("groupedNodes", groupedNodes);
 
-  // var circle = svg.selectAll(".circle")
-  //   .data(nodes, d => d.__key__);
+  // var cutEdges = foci.cutEdges();
+  // console.log("cutEdges", cutEdges);
   //
-  // circle.enter()
-  //    .append("circle")
-  //    .attr("class", "circle")
-  //    .attr("r", d => d.r)
-  //    .attr("stroke", d => d.cut ? "red" : "black")
-  //    .attr("stroke-width", "2")
-  //    .attr("fill", "white");
-  //    // .call(force.drag);
-  //
-  // circle.enter()
-  //   .append("g")
-  //     .attr("class", "circle")
-  //     .attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; });
-  //
-  // circle.append("circle")
-  //     .attr("class", "circleDoc")
-  //     .attr("r", function(d) { return d.r; })
-  //     .attr("stroke", "black")
-  //     .attr("stroke-width", "2")
-  //     .attr("fill", "orange");
+  // console.log("bundledEdgeSegments", bundledEdgeSegments);
 
   var boundzoom = function(d) {
     var bbox = this.getBBox(),
@@ -657,12 +662,12 @@ d3.json("diigo.json", function(error, data) {
     .attr("transform", "translate(" + translate + ")scale(" + scale + ")");
   };
 
-
   var lc = svg.append("g")
       .attr("class", "hull-labels")
       .selectAll(".label-cont")
-      .data(foci.comps());
+      .data(foci.comps(), d => d.id);
 
+  // console.log("foci comps", foci.comps());
   var lcEnter = lc.enter();
 
   var tp = lcEnter
@@ -756,20 +761,6 @@ d3.json("diigo.json", function(error, data) {
         // .attr("class", "thumbnail")
         // .style("width", d => d.width + "px")
         // .style("height", d => d.height + "px");
-
-  // thumb
-  //   .append("xhtml:iframe");
-    // .style("width", d => d.width + "px")
-    // .style("height", d => d.height + "px");
-
-  // var thumb = doc.select("foreignObject .thumbnail")
-        // .insert("xhtml:iframe", ":first-child")
-        // .attr("class", "link-preview")
-        // .style("z-index", 10);
-
-        // .style("width", d.width + "px")
-        // .style("height", d.height + "px")
-        // .attr("src", "http://starkravingfinkle.org/blog");
   var label = svg.selectAll(".label")
     .data(nodes.filter(d => d.label), d => d.id);
 
@@ -815,49 +806,101 @@ d3.json("diigo.json", function(error, data) {
         .attr("opacity", 0.1)
         .on("click", d => console.log(d));
 
-  var link = svg.selectAll(".link")
-               .data(foci.cutEdges().filter(e => e.target.outLinks.length > 0));
-
-  // build the arrow.
-  // svg.append("svg:defs").selectAll("marker")
-  //     .data(["end"])      // Different link/path types can be defined here
-  //   .enter().append("svg:marker")    // This section adds in the arrows
-  //     .attr("id", String)
-  //     .attr("viewBox", "0 -5 10 10")
-  //     .attr("refX", 15)
-  //     .attr("refY", -1.5)
-  //     .attr("markerWidth", 6)
-  //     .attr("markerHeight", 6)
-  //     .attr("orient", "auto")
-  //   .append("svg:path")
-  //     .attr("d", "M0,-5L10,0L0,5");
-
-
-
+  // var link = svg.selectAll(".link")
+  //              .data(foci.links().filter(l => l.strength === 1));
 
   simulation.on("end", function() {
     hull.each(function(d) {
       cropHullLabels(d, d3.select(this));
     });
 
+    var deepLinks = _.flattenDeep(foci._cutEdges.map(e => {
+                      var src, tgt;
+                      if (e.source.nodes.length > e.target.nodes.length) {
+                        src = e.source;
+                        tgt = e.target;
+                      }
+                      else {
+                        src = e.target;
+                        tgt = e.source;
+                      }
+                      return src.nodes.map(s => {
+                        return tgt.nodes.map(t => {
+                          return {
+                            source: nodes.find(n => n.id === s.id).index,
+                            target: nodes.find(n => n.id === t.id).index
+                          };
+                        });
+                      });
+    }));
+    var flatLinks = foci._cutEdges.map(l => {
+                        return {source: l.source.index, target: l.target.index};
+                    });
+
+    console.log("deepLinks", deepLinks);
+    var fbundling = edgeBundling()
+                    .step_size(1)
+                    .compatibility_threshold(0.01)
+                    .nodes(nodes)
+                    .edges(deepLinks);
+
+  var bundledEdgeSegments = fbundling();
+
     bundledEdgeSegments.forEach( d => {
     // for each of the arrays in the results
     // draw a line between the subdivions points for that edge
         svg
-          .append("path")
+          .insert("path", ":first-child")
             .style("stroke-width", 1)
             .style("stroke", "#ff2222")
             .style("fill", "none")
-            .style("stroke-opacity", 0.5) //use opacity as blending
+            .style("stroke-opacity", 0.3) //use opacity as blending
           .attr("d", bundleLine(d));
     });
 
     marching_squares(group => {
+      // TODO: hull zoom
+      // this happens in a for loop
+      var backdrop = svg.select(".bubble-cont")
+         .selectAll(".backdrop")
+         .data(group.d);
+
+      // console.log("group d", group.d);
+            // .attr("d", function(d){ return curve(d); })
+      backdrop.enter()
+        // .insert("path", ":first-child")
+        .append("path")
+        .attr("class", "backdrop")
+        .attr("stroke-linejoin", "round")
+        .attr("opacity", 0.1);
+            // .attr("id", (d, i) => "co" + i)
+
+      backdrop
+        .attr("d", d => hullcurve(d))
+        .attr("fill", "grey")
+        .attr("stroke", "lightgrey")
+        .on("click", boundzoom);
+        // .on("click", boundzoom)
+        // .on("mouseover", function(d) {
+        //   d3.select(this).attr("opacity", 1);
+        //   console.log("d", d);
+        // })
+        // .on("mouseout", function() {
+        //   d3.select(this).attr("opacity", 0.5);
+        // });
+
+      backdrop.exit().remove();
+
+
+      }, [{nodes: foci.data()}], 0.005);
+
+    marching_squares(group => {
+      // TODO: not running right now
       // console.log("group", group);
       // this happens in a for loop
       var bubble = svg.select(".bubble-cont")
          .selectAll(".bubble-"+group.key)
-          .data(group.d, d => d.id);
+         .data(group.d);
 
       // console.log("group d", group.d);
             // .attr("d", function(d){ return curve(d); })
@@ -866,7 +909,7 @@ d3.json("diigo.json", function(error, data) {
         .append("path")
         .attr("class", "bubble-"+group.key)
         .attr("stroke-linejoin", "round")
-        .attr("opacity", 0.5);
+        .attr("opacity", 0.3);
             // .attr("id", (d, i) => "co" + i)
 
       bubble
@@ -883,8 +926,19 @@ d3.json("diigo.json", function(error, data) {
 
       bubble.exit().remove();
 
-      }, groupsById);
 
+      // svg.append("circle")
+      //     .attr("class", "circle")
+      //     // .style("width",  diameter + "px")
+      //     // .style("height", diameter + "px")
+      //     .style("cx", shiftedWidth / 2)
+      //     .style("cy", shiftedHeight / 2)
+      //     .style("r", 300 / 2)
+      //     .style("stroke-width", 1)
+      //     .style("stroke", "blue")
+      //     .style("fill", "#eee");
+
+      }, groupsById);
 
 
     // link.enter()
@@ -892,7 +946,7 @@ d3.json("diigo.json", function(error, data) {
     //   // .append("line")
     //   //    .attr("class", function(d) { return "link " + d.type; })
     //   .attr("class", "link")
-    //   .attr("opacity", 0.3)
+    //   // .attr("opacity", 0.3)
     //   // .attr("marker-end", "url(#end)");
     //   .attr("x1", d => d.source.x)
     //   .attr("y1", d => d.source.y)
@@ -914,6 +968,12 @@ d3.json("diigo.json", function(error, data) {
     var q2 = d3.geom.quadtree(nodes);
     nodes.forEach(d => {
       q2.visit(collide(d, 5, 1));
+      // var circle={x: shiftedWidth/2, y: shiftedHeight/2, r: 300};
+      // var collision = rectCircleColliding(circle, d, false);
+      // if (collision.bounce) {
+      //   d.x = d.x + (collision.x * d.x) * 0.01;
+      //   d.y = d.y + (collision.y * d.y) * 0.01;
+      // }
       // boundPanel(d, panels.center, 1);
     });
 
