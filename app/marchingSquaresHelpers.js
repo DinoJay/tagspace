@@ -172,7 +172,8 @@ function draw_marching_squares(callback, groups, isolevel = 0.0250,
 
   groups.forEach(g => {
 
-    set = g.nodes; //graph.nodes.filter(function(x){return x.group==g;});
+    set = g.values; //graph.nodes.filter(function(x){return x.group==g;});
+    // console.log("marching_squares g.set", g.set);
 
     bubblePoints = [];
     var tetriscells = [];

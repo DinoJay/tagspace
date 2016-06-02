@@ -473,7 +473,8 @@ d3.json("diigo.json", function(error, data) {
                 // .attr("transform", "translate(200, 200)")
                 .attr("overflow", "visible")
                 // .attr("transform", "translate(" + [0, 0] + ")")
-                .call(zoom);
+                .call(zoom)
+                .on("dblclick.zoom", null);
                 // .append("g");
 
   // svg.attr("transform", "scale(0.5)");
@@ -511,21 +512,18 @@ d3.json("diigo.json", function(error, data) {
     });
   }));
 
-  var groupsById =  foci.groups().map(g => {
-    g.ids = _.flatten(g.values.map(sn => sn.nodes ? sn.nodes.map(n => n.id) : sn.id ));
-    return g;
-  });
-
-  // console.log("groupsById", groupsById);
-
-  groupsById.forEach(g => {
-    g.nodes = g.ids.map(id => {
-      var n = nodes.find(n => n.id === id);
-      return n;
+  var appliedComps = foci.comps().map(c => {
+    c.sets.map(s => {
+      s.values = s.values.map(on => {
+        return nodes.find(n => n.id === on.id);
+      });
+      // if(s.values.length === s.nodes.length) return [];
+      return s;
     });
-
-    return g;
+    return c;
   });
+
+  console.log("foci.comps()", foci.comps());
 
   // console.log("foci data", foci.data(), foci.data().length);
   // console.log("foci links", foci.links());
@@ -641,6 +639,8 @@ d3.json("diigo.json", function(error, data) {
     console.log("hull", d);
     // var hullDocs = doc.filter(e => d.nodes.find(n => n.id === e.id));
     // console.log("hullDocs", hullDocs);
+    zoom.translate(translate);
+    zoom.scale(scale);
 
     svg.transition()
       .duration(750)
@@ -667,7 +667,7 @@ d3.json("diigo.json", function(error, data) {
       .selectAll(".label-cont")
       .data(foci.comps(), d => d.id);
 
-  // console.log("foci comps", foci.comps());
+  console.log("foci comps", foci.comps());
   var lcEnter = lc.enter();
 
   var tp = lcEnter
@@ -788,15 +788,15 @@ d3.json("diigo.json", function(error, data) {
       .attr("height", d.height);
   });
 
-  var circle = svg.append("g")
-      .attr("class", "circle-cont")
-      .selectAll("g")
-      .data(foci.data())
-      .enter().append("g")
-        .attr("transform", function(d) {
-          return "translate(" + d.center.x + "," + d.center.y + ")"; })
-        .attr("class", function(d) { return "node" + (!d.children ? " node--leaf" : d.depth ? "" : " node--root"); })
-        .on("click", d => console.log(d));
+  // var circle = svg.append("g")
+  //     .attr("class", "circle-cont")
+  //     .selectAll("g")
+  //     .data(foci.data())
+  //     .enter().append("g")
+  //       .attr("transform", function(d) {
+  //         return "translate(" + d.center.x + "," + d.center.y + ")"; })
+  //       .attr("class", function(d) { return "node" + (!d.children ? " node--leaf" : d.depth ? "" : " node--root"); })
+  //       .on("click", d => console.log(d));
 
   circle.append("circle")
         .attr("id", function(d, i) { return "node-" + i; })
@@ -833,14 +833,19 @@ d3.json("diigo.json", function(error, data) {
                         });
                       });
     }));
+
     var flatLinks = foci._cutEdges.map(l => {
-                        return {source: l.source.index, target: l.target.index};
+                        return {
+                          source: l.source.index,
+                          target: l.target.index
+                        };
                     });
 
     console.log("deepLinks", deepLinks);
+
     var fbundling = edgeBundling()
                     .step_size(1)
-                    .compatibility_threshold(0.01)
+                    .compatibility_threshold(0.1)
                     .nodes(nodes)
                     .edges(deepLinks);
 
@@ -891,54 +896,44 @@ d3.json("diigo.json", function(error, data) {
 
       backdrop.exit().remove();
 
+      }, [{values: foci.data()}], 0.005);
 
-      }, [{nodes: foci.data()}], 0.005);
+    appliedComps.forEach((c, i)=> {
+      // console.log("current comp", c);
+      marching_squares(group => {
+        // TODO: not running right now
+        // console.log("group", group);
+        // this happens in a for loop
+        var bubble = svg.select(".bubble-cont")
+           .selectAll(".bubble-"+ i + group.key)
+           .data(group.d);
 
-    marching_squares(group => {
-      // TODO: not running right now
-      // console.log("group", group);
-      // this happens in a for loop
-      var bubble = svg.select(".bubble-cont")
-         .selectAll(".bubble-"+group.key)
-         .data(group.d);
+        // console.log("group d", group.d);
+              // .attr("d", function(d){ return curve(d); })
+        bubble.enter()
+          // .insert("path", ":first-child")
+          .append("path")
+          .attr("class", "bubble-"+ i + group.key)
+          .attr("stroke-linejoin", "round")
+          .attr("opacity", 0.3);
+              // .attr("id", (d, i) => "co" + i)
 
-      // console.log("group d", group.d);
-            // .attr("d", function(d){ return curve(d); })
-      bubble.enter()
-        // .insert("path", ":first-child")
-        .append("path")
-        .attr("class", "bubble-"+group.key)
-        .attr("stroke-linejoin", "round")
-        .attr("opacity", 0.3);
-            // .attr("id", (d, i) => "co" + i)
+        bubble
+          .attr("d", d => hullcurve(d))
+          .attr("fill", hullcolor(group.key))
+          .on("click", boundzoom)
+          .on("mouseover", function(d) {
+            d3.select(this).attr("opacity", 1);
+            console.log("d", d);
+          })
+          .on("mouseout", function() {
+            d3.select(this).attr("opacity", 0.5);
+          });
 
-      bubble
-        .attr("d", d => hullcurve(d))
-        .attr("fill", hullcolor(group.key))
-        .on("click", boundzoom)
-        .on("mouseover", function(d) {
-          d3.select(this).attr("opacity", 1);
-          console.log("d", d);
-        })
-        .on("mouseout", function() {
-          d3.select(this).attr("opacity", 0.5);
-        });
+        bubble.exit().remove();
+      }, c.sets);
 
-      bubble.exit().remove();
-
-
-      // svg.append("circle")
-      //     .attr("class", "circle")
-      //     // .style("width",  diameter + "px")
-      //     // .style("height", diameter + "px")
-      //     .style("cx", shiftedWidth / 2)
-      //     .style("cy", shiftedHeight / 2)
-      //     .style("r", 300 / 2)
-      //     .style("stroke-width", 1)
-      //     .style("stroke", "blue")
-      //     .style("fill", "#eee");
-
-      }, groupsById);
+    });
 
 
     // link.enter()
