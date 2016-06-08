@@ -25,6 +25,7 @@
   },
   "homepage": "https://github.com/alicoding/react-webpack-babel#readme",
   "dependencies": {
+    "colorbrewer": "^1.0.0",
     "connected-components": "^1.0.0",
     "d3": "^3.5.16",
     "d3-force": "^0.6.3",

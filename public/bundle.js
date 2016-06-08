@@ -69,15 +69,27 @@
 	
 	var _d3Force2 = _interopRequireDefault(_d3Force);
 	
-	var _marchingSquaresHelpers = __webpack_require__(12);
+	var _marchingSquaresHelpers = __webpack_require__(11);
 	
 	var _marchingSquaresHelpers2 = _interopRequireDefault(_marchingSquaresHelpers);
 	
-	var _polyOffset = __webpack_require__(13);
+	var _polyOffset = __webpack_require__(12);
 	
 	var _polyOffset2 = _interopRequireDefault(_polyOffset);
 	
+	var _edgebundling = __webpack_require__(13);
+	
+	var _edgebundling2 = _interopRequireDefault(_edgebundling);
+	
+	var _colorbrewer = __webpack_require__(14);
+	
+	var _colorbrewer2 = _interopRequireDefault(_colorbrewer);
+	
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+	
+	console.log("brewer", _colorbrewer2.default);
+	
+	var o = _d2.default.scale.ordinal().domain(["foo", "bar", "baz"]).range(_colorbrewer2.default.Paired[9]);
 	
 	var hullcolor = _d2.default.scale.category20();
 	
@@ -86,6 +98,65 @@
 	}).y(function (d) {
 	  return d.y;
 	});
+	
+	var bundleLine = _d2.default.svg.line().x(function (d) {
+	  return d.x;
+	}).y(function (d) {
+	  return d.y;
+	}).interpolate("linear");
+	
+	// function force(alpha) {
+	//   for (var i = 0, n = nodes.length, node, k = alpha * 0.1; i < n; ++i) {
+	//     node = nodes[i];
+	//     node.vx -= node.x * k;
+	//     node.vy -= node.y * k;
+	//   }
+	// }
+	
+	function rectCircleColliding(circle, rect, init) {
+	  // var distX = Math.abs(circle.x - rect.x);
+	  // var distY = Math.abs(circle.y - rect.y);
+	
+	  var center = {
+	    x: circle.x - rect.x,
+	    y: circle.y - rect.y
+	  };
+	
+	  // check circle position inside the rectangle quadrant
+	  var side = {
+	    x: Math.abs(center.x) - rect.width / 2,
+	    y: Math.abs(center.y) - rect.height / 2
+	  };
+	
+	  // if (side.x < circle.r && side.y < circle.r) {
+	  //   console.log("side", side);
+	  //   // return { bounce: false };
+	  // } // inside
+	
+	  if (side.x > circle.r) return { bounce: false };
+	  if (side.y > circle.r) return { bounce: false };
+	
+	  var dx = 0,
+	      dy = 0;
+	  if (side.x <= 0 || side.y <= 0) {
+	    if (Math.abs(side.x) < circle.r && side.y < 0) {
+	      dx = center.x * side.x < 0 ? 1 : -1;
+	    } else if (Math.abs(side.y) < circle.r && side.x < 0) {
+	      dy = center.y * side.y < 0 ? 1 : -1;
+	    }
+	
+	    return { bounce: init, x: dx, y: dy };
+	  }
+	
+	  // circle is near the corner
+	  var bounce = side.x * side.x + side.y * side.y < circle.r * circle.r;
+	  if (!bounce) return { bounce: false };
+	
+	  var norm = Math.sqrt(side.x * side.x + side.y * side.y);
+	  dx = center.x < 0 ? 1 : -1;
+	  dy = center.y < 0 ? 1 : -1;
+	  return { bounce: true, x: dx * side.x / norm, y: dy * side.y / norm };
+	}
 	
 	function cropHullLabels(d, path) {
 	  //  var textpath = document.getElementById("tp");
@@ -120,7 +191,7 @@
 	//   }
 	// }
 	
-	__webpack_require__(14);
+	__webpack_require__(16);
 	
 	var labelLine = _d2.default.svg.line().x(function (d) {
 	  return d.x;
@@ -128,16 +199,16 @@
 	  return d.y;
 	}).interpolate((0, _polyOffset2.default)(15));
 	
-	var overflow = { left: 0, bottom: 0 };
-	var width = window.innerWidth + overflow.left;
-	var height = window.innerHeight + overflow.bottom;
+	var width = 1400; //window.innerWidth;
+	var height = 600; //window.innerHeight;
 	
-	var margin = {
-	  right: 100,
-	  left: 100,
-	  top: 100,
-	  bottom: 100
+	var viewBox = {
+	  left: 0,
+	  top: 500
 	};
+	
+	var shiftedHeight = height + viewBox.top;
+	var shiftedWidth = width + viewBox.top;
 	
 	function boundMargin(node, width, height, margin) {
 	  var halfHeight = node.height / 2,
@@ -153,53 +224,45 @@
 	  if (node.y - halfHeight < margin.top) {
 	    node.y = halfHeight + margin.top;
 	  }
-	  if (node.y + halfHeight > height - margin.bottom) {
-	    node.y = height - margin.bottom - halfHeight;
+	  if (node.y + halfHeight > height - margin.top) {
+	    node.y = height - margin.top - halfHeight;
 	  }
 	  return node;
 	}
 	
-	function simple_comp(nodes, links) {
-	  var groups = [];
-	  var visited = {};
-	  var v;
-	
-	  // this should look like:
-	  // {
-	  //   "a2": ["a5"],
-	  //   "a3": ["a6"],
-	  //   "a4": ["a5"],
-	  //   "a5": ["a2", "a4"],
-	  //   "a6": ["a3"],
-	  //   "a7": ["a9"],
-	  //   "a9": ["a7"]
-	  // }
-	
-	  var vertices = nodes.map(function (d) {
-	    return d.index;
-	  });
-	  var edgeList = links.map(function (l) {
-	    var edge = [l.source.index, l.target.index];
-	    return edge;
-	  });
-	  // console.log("edgeList", edgeList);
-	
-	  var adjlist = convert_edgelist_to_adjlist(vertices, edgeList);
-	
-	  for (v in adjlist) {
-	    if (adjlist.hasOwnProperty(v) && !visited[v]) {
-	      var indices = bfs(v, adjlist, visited);
-	      groups.push(indices.map(function (i) {
-	        return nodes[i];
-	      }));
-	    }
-	  }
-	  return groups.map(function (g) {
-	    return g.filter(function (d) {
-	      return d;
-	    });
-	  });
-	}
+	// function simple_comp(nodes, links) {
+	//   var groups = [];
+	//   var visited = {};
+	//   var v;
+	//
+	//   // this should look like:
+	//   // {
+	//   //   "a2": ["a5"],
+	//   //   "a3": ["a6"],
+	//   //   "a4": ["a5"],
+	//   //   "a5": ["a2", "a4"],
+	//   //   "a6": ["a3"],
+	//   //   "a7": ["a9"],
+	//   //   "a9": ["a7"]
+	//   // }
+	//
+	//   var vertices = nodes.map(d => d.index);
+	//   var edgeList = links.map(l => {
+	//     var edge = [l.source.index, l.target.index];
+	//     return edge;
+	//   });
+	//   // console.log("edgeList", edgeList);
+	//
+	//   var adjlist = convert_edgelist_to_adjlist(vertices, edgeList);
+	//
+	//   for (v in adjlist) {
+	//     if (adjlist.hasOwnProperty(v) && !visited[v]) {
+	//       var indices = bfs(v, adjlist, visited);
+	//       groups.push(indices.map(i => nodes[i]));
+	//     }
+	//   }
+	//   return groups.map(g => g.filter(d => d));
+	// }
 	
 	function collide(node, padding, energy) {
 	  return function (quad) {
@@ -444,7 +507,7 @@
 	// var groupFill = function(d, i) { return fill(i & 3); };
 	
 	_d2.default.json("diigo.json", function (error, data) {
-	  var diigo = data.slice(0, 400).map(function (d, i) {
+	  var diigo = data.slice(0, 200).map(function (d, i) {
 	    d.tags = d.tags.split(",");
 	    d.id = i;
 	    return d;
@@ -457,7 +520,7 @@
 	  //d
 	  // data.documents.forEach(d => d.r = 12);
 	
-	  var zoom = _d2.default.behavior.zoom().size(width, height).scaleExtent([-10, 40]).on("zoom", function () {
+	  var zoom = _d2.default.behavior.zoom().size(shiftedWidth, shiftedHeight).scaleExtent([-10, 40]).on("zoom", function () {
 	    console.log("zoom", _d2.default.event);
 	    svg.attr("transform", "translate(" + _d2.default.event.translate + ")scale(" + _d2.default.event.scale + ")");
 	    var w = 1 * _d2.default.event.scale;
@@ -470,34 +533,37 @@
 	  });
 	
 	  var svg = _d2.default.select("body").append("svg").attr("width", width).attr("height", height)
-	  // .attr("viewBox", viewBox.left + " " + viewBox.bottom + " " + (width - viewBox.left) + " " + (height - viewBox.bottom))
-	  .attr("overflow", "hidden").append("g")
-	  // .attr("viewBox", (-viewBox.left ) + " " + (-viewBox.bottom ) + " " + (width - viewBox.left) + " " + (height - viewBox.bottom))
+	  // .attr("viewBox", 0 + " " + 200 + " " + width + " " + height)
+	  .attr("viewBox", viewBox.left + " " + viewBox.top + " " + (width - viewBox.left) + " " + (height - viewBox.top)).attr("overflow", "visible").append("g")
+	  // .attr("viewBox", (-viewBox.left ) + " " + (-viewBox.top ) + " " + (width - viewBox.left) + " " + (height - viewBox.top))
 	  // .attr("transform", "translate(200, 200)")
 	  .attr("overflow", "visible")
 	  // .attr("transform", "translate(" + [0, 0] + ")")
-	  .call(zoom);
+	  .call(zoom).on("dblclick.zoom", null);
 	  // .append("g");
-	
+	  //
+	  svg.append("rect").attr("width", shiftedWidth).attr("height", shiftedHeight).style("pointer-events", "all").style("fill", "none");
+	  //make transparent (vs black if commented-out)
 	  // svg.attr("transform", "scale(0.5)");
 	  // var elmnt = d3.select("svg").node();
 	
-	  window.scrollTo(overflow.left, overflow.bottom);
+	  // window.scrollTo(overflow.left, overflow.top ) ;
 	
-	  var foci = (0, _foci2.default)().gravity(0.01).sets(diigo).size([width, height]).charge(function (d) {
+	  // TODO: update
+	  var foci = (0, _foci2.default)().gravity(0.01).sets(diigo).size([width, height + viewBox.top]).charge(function () {
 	    // var conn = this.hasConnections(d);
 	    // return conn > 0 ? -100 / conn : -100;
 	    // return - d.nodes.length * 40;
 	    return -20;
 	  }).linkStrength(function (l) {
 	    return l.target.label ? 0 : 0;
-	  }).linkDistance(function (l) {
+	  }).linkDistance(function () {
 	    // var conn = this.connections(l.source);
 	    return 7;
 	  }).start();
 	
 	  var nodes = _lodash2.default.flatten(foci.data().map(function (d) {
-	    // TODO
+	    // TODO: not really clean
 	    if (d.label) return d;
 	    return d.nodes.map(function (e) {
 	      e.center = d.center;
@@ -508,27 +574,20 @@
 	    });
 	  }));
 	
-	  var groupsById = foci.groups().map(function (g) {
-	    g.ids = _lodash2.default.flatten(g.values.map(function (sn) {
-	      return sn.nodes ? sn.nodes.map(function (n) {
-	        return n.id;
-	      }) : sn.id;
-	    }));
-	    return g;
-	  });
-	
-	  // console.log("groupsById", groupsById);
-	
-	  groupsById.forEach(function (g) {
-	    g.nodes = g.ids.map(function (id) {
-	      var n = nodes.find(function (n) {
-	        return n.id === id;
+	  var appliedComps = foci.comps().map(function (c) {
+	    c.sets.map(function (s) {
+	      s.values = s.values.map(function (on) {
+	        return nodes.find(function (n) {
+	          return n.id === on.id;
+	        });
 	      });
-	      return n;
+	      // if(s.values.length === s.nodes.length) return [];
+	      return s;
 	    });
-	
-	    return g;
+	    return c;
 	  });
+	
+	  console.log("foci.comps()", foci.comps());
 	
 	  // console.log("foci data", foci.data(), foci.data().length);
 	  // console.log("foci links", foci.links());
@@ -540,6 +599,20 @@
 	  }).strength(1)).force("y", _d3Force2.default.forceY(function (d) {
 	    return d.center.y;
 	  }).strength(1))
+	  // .force("centerCircle", function(alpha) {
+	  // for (var i = 0, n = nodes.length, k = alpha ; i < n; ++i) {
+	  //   var d = nodes[i];
+	  //   // node.vx -= node.x * k;
+	  //   // node.vy -= node.y * k;
+	  //   var circle={x: shiftedWidth/2, y: shiftedHeight/2, r: 300};
+	  //   var collision = rectCircleColliding(circle, d, false);
+	  //   if (collision.bounce) {
+	  //     d.vx = d.x + (collision.x) * ( k / 10000 );
+	  //     d.vy = d.y + (collision.y) * ( k / 10000 );
+	  //   }
+	  // }
+	
+	  // });
 	  // .force("charge", d3_force.forceManyBody()
 	  //                          .theta(2)
 	  //                          .strength(2)
@@ -571,7 +644,7 @@
 	
 	  // console.log("adjList", adjList);
 	
-	  var bicomps = foci.bicomps();
+	  // var bicomps = foci.bicomps();
 	  //
 	  // console.log("bicomps", bicomps);
 	  // console.log("biconnectedComponents", comps);
@@ -586,12 +659,12 @@
 	  }).entries(spreadTags).sort(function (a, b) {
 	    return _d2.default.descending(a.values.length, b.values.length);
 	  });
-	  //
+	
 	  var wordScale = _d2.default.scale.linear().domain(_d2.default.extent(allTags, function (d) {
 	    return d.values.length;
 	  })).rangeRound([7, 50]);
 	
-	  var simple_gr = simple_comp(foci.data(), foci.links());
+	  // var simple_gr = simple_comp(foci.data(), foci.reducedEdges());
 	  // console.log("largest simple group", simple_gr.find(d => d.length > 50).filter(d => d.label));
 	  // var complex_gr = bicomps.map(g => {
 	  //   return g.map(i => nodes[i]);
@@ -600,99 +673,45 @@
 	  // console.log("largest complex group", gr.find(d => d.length > 50).filter(d => d.label));
 	  // console.log("simple gr", simple_gr);
 	
-	  var comps = simple_gr.map(function (g, i) {
-	    var nodes = _lodash2.default.flatten(g.map(function (d) {
-	      return d.nodes;
-	    }));
-	    var tags = _d2.default.nest().key(function (d) {
-	      return d;
-	    })
-	    // TODO: check it later
-	    .entries(_lodash2.default.flatten(nodes.filter(function (d) {
-	      return d;
-	    }).map(function (d) {
-	      return d.tags;
-	    }))).sort(function (a, b) {
-	      return _d2.default.descending(a.values.length, b.values.length);
-	    });
-	
-	    return {
-	      id: i + "comp", values: g,
-	      tags: tags,
-	      // TODO: check later
-	      nodes: nodes.filter(function (d) {
-	        return d;
-	      })
-	      // nodes: g
-	    };
-	  });
-	
-	  // console.log("comps", comps);
-	
-	  // var redComps = bicomps.map(c => c.filter(v => cut_vertices.indexOf(v) === -1));
+	  // var comps = simple_gr.map((g, i) => {
+	  //   var nodes = _.flatten(g.map(d => d.nodes));
+	  //   var tags = d3.nest()
+	  //     .key(d => d)
+	  //     // TODO: check it later
+	  //     .entries(_.flatten(nodes.filter(d => d).map(d => d.tags)))
+	  //   .sort((a, b) => d3.descending(a.values.length, b.values.length));
 	  //
-	  // console.log("redComps", redComps);
-	
-	  //
-	  // var deeperComps = redComps.map(c => {
-	  //   // console.log("comp", c);
-	  //   var compLinks = edgeList.filter(l => c.indexOf(l[0]) !== -1 && c.indexOf(l[1]) !== -1);
-	  //   // console.log("compLinks", compLinks);
-	  //   var adjList = convert_edgelist_to_adjlist(vertices, compLinks);
-	  //   // console.log("adjlist", adjList);
-	  //   return biconnectedComponents(adjList);
+	  //   return {
+	  //     id: i + "comp", values: g,
+	  //     tags: tags,
+	  //     // TODO: check later
+	  //     nodes: nodes.filter(d => d)
+	  //     // nodes: g
+	  //   };
 	  // });
-	  // // console.log("deeper comps", deeperComps);
-	  //
-	  // var groups = [];
-	  // var visited = {};
-	  // var v;
-	  // for (v in adjList) {
-	  //   if (adjList.hasOwnProperty(v) && !visited[v]) {
-	  //     groups.push(bfs(v, adjList, visited));
-	  //   }
-	  // }
-	  // // TODO: fix later
-	  // groups = groups.map(g => g.map(n => parseInt(n)));
-	  // // console.log("groups", groups);
-	  //
-	  // var groupedNodes = groups.map(g => g.map(i => nodes[parseInt(i)]));
-	  // var compNodes = redComps.map(c => c.map(i => nodes[i]));
-	  //
-	  // // console.log("groupedNodes", groupedNodes);
 	
-	  // var circle = svg.selectAll(".circle")
-	  //   .data(nodes, d => d.__key__);
+	  // var cutEdges = foci.cutEdges();
+	  // console.log("cutEdges", cutEdges);
 	  //
-	  // circle.enter()
-	  //    .append("circle")
-	  //    .attr("class", "circle")
-	  //    .attr("r", d => d.r)
-	  //    .attr("stroke", d => d.cut ? "red" : "black")
-	  //    .attr("stroke-width", "2")
-	  //    .attr("fill", "white");
-	  //    // .call(force.drag);
-	  //
-	  // circle.enter()
-	  //   .append("g")
-	  //     .attr("class", "circle")
-	  //     .attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; });
-	  //
-	  // circle.append("circle")
-	  //     .attr("class", "circleDoc")
-	  //     .attr("r", function(d) { return d.r; })
-	  //     .attr("stroke", "black")
-	  //     .attr("stroke-width", "2")
-	  //     .attr("fill", "orange");
+	  // console.log("bundledEdgeSegments", bundledEdgeSegments);
 	
-	  var boundzoom = function boundzoom() {
+	  var boundzoom = function boundzoom(d) {
+	    // simulation.alphaTarget(0.7);
+	    // simulation.restart();
 	    var bbox = this.getBBox(),
 	        dx = bbox.width,
 	        dy = bbox.height + 50,
 	        x = (bbox.x + bbox.x + bbox.width) / 2,
 	        y = (bbox.y + bbox.y + bbox.height) / 2,
 	        scale = Math.max(1, Math.min(8, 0.9 / Math.max(dx / width, dy / height))),
-	        translate = [width / 2 - scale * x, height / 2 - scale * y];
+	        translate = [width / 2 - scale * x, (height + viewBox.top) / 2 - scale * y];
+	
+	    // d3.select(this).attr("stroke", 0);
+	    console.log("hull", d);
+	    // var hullDocs = doc.filter(e => d.nodes.find(n => n.id === e.id));
+	    // console.log("hullDocs", hullDocs);
+	    zoom.translate(translate);
+	    zoom.scale(scale);
 	
 	    svg.transition().duration(750)
 	    // .style("stroke-width", 1.5 / scale + "px")
@@ -700,21 +719,24 @@
 	  };
 	
 	  var zoomRect = function zoomRect(d) {
-	    var dx = d.width,
-	        dy = d.height,
-	        x = d.x,
+	    // var dx = d.width,
+	    //   dy = d.height,
+	    var x = d.x,
 	        y = d.y,
 	        scale = 150,
 	        //Math.max(1, Math.min(8, 0.9 / Math.max(dx / width, dy / height))),
-	    translate = [width / 2 - scale * x, height / 2 - scale * y];
+	    translate = [shiftedWidth / 2 - scale * x, shiftedHeight / 2 - scale * y];
 	
 	    svg.transition().duration(750)
 	    // .style("stroke-width", 1.5 / scale + "px")
 	    .attr("transform", "translate(" + translate + ")scale(" + scale + ")");
 	  };
 	
-	  var lc = svg.append("g").attr("class", "hull-labels").selectAll(".label-cont").data(comps);
+	  var lc = svg.append("g").attr("class", "hull-labels").selectAll(".label-cont").data(foci.comps(), function (d) {
+	    return d.id;
+	  });
 	
+	  console.log("foci comps", foci.comps());
 	  var lcEnter = lc.enter();
 	
 	  var tp = lcEnter.append("g").attr("class", ".label-cont").append("text").attr("class", "descr").append("textPath").attr("text-anchor", "middle").attr("startOffset", "75%").attr("alignment-baseline", "text-after-edge").attr("dominant-baseline", "baseline").attr("id", function (d) {
@@ -791,20 +813,6 @@
 	  // .attr("class", "thumbnail")
 	  // .style("width", d => d.width + "px")
 	  // .style("height", d => d.height + "px");
-	
-	  // thumb
-	  //   .append("xhtml:iframe");
-	  // .style("width", d => d.width + "px")
-	  // .style("height", d => d.height + "px");
-	
-	  // var thumb = doc.select("foreignObject .thumbnail")
-	  // .insert("xhtml:iframe", ":first-child")
-	  // .attr("class", "link-preview")
-	  // .style("z-index", 10);
-	
-	  // .style("width", d.width + "px")
-	  // .style("height", d.height + "px")
-	  // .attr("src", "http://starkravingfinkle.org/blog");
 	  var label = svg.selectAll(".label").data(nodes.filter(function (d) {
 	    return d.label;
 	  }), function (d) {
@@ -824,16 +832,19 @@
 	    d.height = this.getBBox().height;
 	
 	    _d2.default.select(this).select("text").attr("dy", d.height);
+	
 	    _d2.default.select(this).insert("rect", ":first-child").attr("fill", "none").attr("width", d.width).attr("height", d.height);
 	  });
 	
-	  var circle = svg.append("g").attr("class", "circle-cont").selectAll("g").data(foci.data()).enter().append("g").attr("transform", function (d) {
-	    return "translate(" + d.center.x + "," + d.center.y + ")";
-	  }).attr("class", function (d) {
-	    return "node" + (!d.children ? " node--leaf" : d.depth ? "" : " node--root");
-	  }).on("click", function (d) {
-	    return console.log(d);
-	  });
+	  // var circle = svg.append("g")
+	  //     .attr("class", "circle-cont")
+	  //     .selectAll("g")
+	  //     .data(foci.data())
+	  //     .enter().append("g")
+	  //       .attr("transform", function(d) {
+	  //         return "translate(" + d.center.x + "," + d.center.y + ")"; })
+	  //       .attr("class", function(d) { return "node" + (!d.children ? " node--leaf" : d.depth ? "" : " node--root"); })
+	  //       .on("click", d => console.log(d));
 	
 	  circle.append("circle").attr("id", function (d, i) {
 	    return "node-" + i;
@@ -843,60 +854,127 @@
 	    return console.log(d);
 	  });
 	
-	  var link = svg.selectAll(".link").data(foci.links());
-	
-	  // build the arrow.
-	  // svg.append("svg:defs").selectAll("marker")
-	  //     .data(["end"])      // Different link/path types can be defined here
-	  //   .enter().append("svg:marker")    // This section adds in the arrows
-	  //     .attr("id", String)
-	  //     .attr("viewBox", "0 -5 10 10")
-	  //     .attr("refX", 15)
-	  //     .attr("refY", -1.5)
-	  //     .attr("markerWidth", 6)
-	  //     .attr("markerHeight", 6)
-	  //     .attr("orient", "auto")
-	  //   .append("svg:path")
-	  //     .attr("d", "M0,-5L10,0L0,5");
-	
-	  // link.enter().insert("line", ":first-child")
-	  //              //    .attr("class", function(d) { return "link " + d.type; })
-	  //              .attr("class", "link")
-	  //              .attr("marker-end", "url(#end)");
+	  // var link = svg.selectAll(".link")
+	  //              .data(foci.links().filter(l => l.strength === 1));
 	
 	  simulation.on("end", function () {
 	    hull.each(function (d) {
 	      cropHullLabels(d, _d2.default.select(this));
 	    });
 	
-	    (0, _marchingSquaresHelpers2.default)(function (group) {
-	      // console.log("group", group);
-	      // this happens in a for loop
-	      var bubble = svg.select(".bubble-cont").selectAll(".bubble-" + group.key).data(group.d, function (d) {
-	        return d.id;
+	    var deepLinks = _lodash2.default.flattenDeep(foci._cutEdges.map(function (e) {
+	      var src, tgt;
+	      if (e.source.nodes.length > e.target.nodes.length) {
+	        src = e.source;
+	        tgt = e.target;
+	      } else {
+	        src = e.target;
+	        tgt = e.source;
+	      }
+	      return src.nodes.map(function (s) {
+	        return tgt.nodes.map(function (t) {
+	          return {
+	            source: nodes.find(function (n) {
+	              return n.id === s.id;
+	            }).index,
+	            target: nodes.find(function (n) {
+	              return n.id === t.id;
+	            }).index
+	          };
+	        });
 	      });
+	    }));
 	
+	    var flatLinks = foci._cutEdges.map(function (l) {
+	      return {
+	        source: l.source.index,
+	        target: l.target.index
+	      };
+	    });
+	
+	    console.log("deepLinks", deepLinks);
+	
+	    var fbundling = (0, _edgebundling2.default)().step_size(1).compatibility_threshold(0.2).nodes(nodes).edges(deepLinks);
+	
+	    var bundledEdgeSegments = fbundling();
+	
+	    bundledEdgeSegments.forEach(function (d) {
+	      // for each of the arrays in the results
+	      // draw a line between the subdivions points for that edge
+	      svg.insert("path", ":first-child").style("stroke-width", 1).style("stroke", "#ff2222").style("fill", "none").style("stroke-opacity", 0.3) //use opacity as blending
+	      .attr("d", bundleLine(d));
+	    });
+	
+	    (0, _marchingSquaresHelpers2.default)(function (group) {
+	      // TODO: hull zoom
+	      // this happens in a for loop
+	      var backdrop = svg.select(".bubble-cont").selectAll(".backdrop").data(group.d);
+	
+	      // console.log("group d", group.d);
 	      // .attr("d", function(d){ return curve(d); })
-	      bubble.enter()
+	      backdrop.enter()
 	      // .insert("path", ":first-child")
-	      .append("path").attr("class", "bubble-" + group.key).attr("stroke-linejoin", "round").attr("opacity", 0.5);
+	      .append("path").attr("class", "backdrop").attr("stroke-linejoin", "round").attr("opacity", 0.1);
 	      // .attr("id", (d, i) => "co" + i)
 	
-	      bubble.attr("d", function (d) {
+	      backdrop.attr("d", function (d) {
 	        return hullcurve(d);
-	      }).attr("fill", hullcolor(group.key)).on("click", boundzoom).on("mouseover", function () {
-	        _d2.default.select(this).attr("opacity", 1);
-	        console.log("d", group);
-	      }).on("mouseout", function () {
-	        _d2.default.select(this).attr("opacity", 0.5);
-	      });
+	      }).attr("fill", "grey").attr("stroke", "lightgrey").on("click", boundzoom);
+	      // .on("click", boundzoom)
+	      // .on("mouseover", function(d) {
+	      //   d3.select(this).attr("opacity", 1);
+	      //   console.log("d", d);
+	      // })
+	      // .on("mouseout", function() {
+	      //   d3.select(this).attr("opacity", 0.5);
+	      // });
 	
-	      bubble.exit().remove();
-	    }, groupsById);
+	      backdrop.exit().remove();
+	    }, [{ values: foci.data() }], 0.005);
+	
+	    appliedComps.forEach(function (c, i) {
+	      // console.log("current comp", c);
+	      (0, _marchingSquaresHelpers2.default)(function (group) {
+	        // TODO: not running right now
+	        // console.log("group", group);
+	        // this happens in a for loop
+	        var bubble = svg.select(".bubble-cont").selectAll(".bubble-" + i + group.key).data(group.d);
+	
+	        // console.log("group d", group.d);
+	        // .attr("d", function(d){ return curve(d); })
+	        bubble.enter()
+	        // .insert("path", ":first-child")
+	        .append("path").attr("class", "bubble-" + i + group.key).attr("stroke-linejoin", "round").attr("opacity", 0.3);
+	        // .attr("id", (d, i) => "co" + i)
+	
+	        bubble.attr("d", function (d) {
+	          return hullcurve(d);
+	        }).attr("fill", o(group.key)).on("click", boundzoom).on("mouseover", function (d) {
+	          _d2.default.select(this).attr("opacity", 1);
+	          console.log("d", d);
+	        }).on("mouseout", function () {
+	          _d2.default.select(this).attr("opacity", 0.5);
+	        });
+	
+	        bubble.exit().remove();
+	      }, c.sets);
+	    });
+	
+	    // link.enter()
+	    //   .insert("line", ":first-child")
+	    //   // .append("line")
+	    //   //    .attr("class", function(d) { return "link " + d.type; })
+	    //   .attr("class", "link")
+	    //   // .attr("opacity", 0.3)
+	    //   // .attr("marker-end", "url(#end)");
+	    //   .attr("x1", d => d.source.x)
+	    //   .attr("y1", d => d.source.y)
+	    //   .attr("x2", d => d.target.x)
+	    //   .attr("y2", d => d.target.y);
 	  });
 	
+	  var counter = 0;
 	  simulation.on("tick", function () {
-	
 	    // label.each(d => {
 	    //   d.x = Math.max(d.width, Math.min(width - 2, d.x));
 	    //   d.y = Math.max(d.height, Math.min(height - 2, d.y));
@@ -909,6 +987,12 @@
 	    var q2 = _d2.default.geom.quadtree(nodes);
 	    nodes.forEach(function (d) {
 	      q2.visit(collide(d, 5, 1));
+	      // var circle={x: shiftedWidth/2, y: shiftedHeight/2, r: 300};
+	      // var collision = rectCircleColliding(circle, d, false);
+	      // if (collision.bounce) {
+	      //   d.x = d.x + (collision.x * d.x) * 0.01;
+	      //   d.y = d.y + (collision.y * d.y) * 0.01;
+	      // }
 	      // boundPanel(d, panels.center, 1);
 	    });
 	
@@ -930,12 +1014,6 @@
 	    label.attr("transform", function (d) {
 	      return "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")";
 	    });
-	
-	    // link
-	    //   .attr("x1", d => d.source.x)
-	    //   .attr("y1", d => d.source.y)
-	    //   .attr("x2", d => d.target.x)
-	    //   .attr("y2", d => d.target.y);
 	
 	    // doc.attr("transform", function(d) { return "rotate(" + (d.x - 90) + ")translate(" + d.y + ")"; })
 	    // doc.attr("x", d => d.x - d.width / 2 );
@@ -26617,208 +26695,114 @@
 	
 	var _d3Force2 = _interopRequireDefault(_d3Force);
 	
-	var _d3Hierarchy = __webpack_require__(11);
-	
-	var _d3Hierarchy2 = _interopRequireDefault(_d3Hierarchy);
-	
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 	
 	function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
 	
-	function crop_graph(nodes, links) {
+	// import d3_hierarchy from "d3-hierarchy";
 	
-	  var delEdges = [];
+	var maxDepth = 1;
+	var isCutEdge = function isCutEdge(l, nodes, linkedByIndex) {
+	  var tgt = nodes[l.target];
+	  var targetDeg = outLinks(tgt, nodes, linkedByIndex).length;
+	  return l.level % maxDepth === 0 && targetDeg > 0;
+	};
+	
+	function collideCircle(data, alpha, r) {
+	  var quadtree = _d2.default.geom.quadtree(data);
+	  return function (d) {
+	    var nx1 = d.x - r,
+	        nx2 = d.x + r,
+	        ny1 = d.y - r,
+	        ny2 = d.y + r;
+	    quadtree.visit(function (quad, x1, y1, x2, y2) {
+	      if (quad.point && quad.point !== d) {
+	        var x = d.x - quad.point.x,
+	            y = d.y - quad.point.y,
+	            l = Math.sqrt(x * x + y * y),
+	            r = d.r + quad.point.r;
+	
+	        if (l < r) {
+	          l = (l - r) / l * alpha;
+	          d.vx -= x *= l;
+	          d.vy -= y *= l;
+	          quad.point.x += x;
+	          quad.point.y += y;
+	        }
+	      }
+	      return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
+	    });
+	  };
+	}
+	
+	function simple_comp(nodes, links) {
+	  var groups = [];
 	  var visited = {};
 	  var v;
+	
+	  // this should look like:
+	  // {
+	  //   "a2": ["a5"],
+	  //   "a3": ["a6"],
+	  //   "a4": ["a5"],
+	  //   "a5": ["a2", "a4"],
+	  //   "a6": ["a3"],
+	  //   "a7": ["a9"],
+	  //   "a9": ["a7"]
+	  // }
 	
 	  var vertices = nodes.map(function (d) {
 	    return d.index;
 	  });
 	  var edgeList = links.map(function (l) {
-	    var edge = [l.source, l.target];
+	    var edge = [l.source.index, l.target.index];
 	    return edge;
 	  });
 	  // console.log("edgeList", edgeList);
 	
 	  var adjlist = convert_edgelist_to_adjlist(vertices, edgeList);
-	  console.log("vertices", vertices, "edges", edgeList, "adjlist", adjlist);
-	
-	  var bfs = function bfs(v, adjlist, visited) {
-	    var q = [];
-	    var current_group = [];
-	    var i, len, adjV, nextVertex;
-	    q.push(v);
-	    visited[v] = true;
-	    var level = 0;
-	    var max = 10;
-	    var delEdges = [];
-	    var delVertices = [];
-	    while (q.length > 0 && level <= max) {
-	      v = q.shift();
-	      current_group.push(v);
-	      // Go through adjacency list of vertex v, and push any unvisited
-	      // vertex onto the queue.
-	      // This is more efficient than our earlier approach of going
-	      // through an edge list.
-	      adjV = adjlist[v];
-	
-	      if (level === max) {
-	        delEdges.push.apply(delEdges, _toConsumableArray(adjV.map(function (u) {
-	          return { source: v, target: u };
-	        })));
-	        delVertices.push.apply(delVertices, _toConsumableArray(adjV));
-	      }
-	
-	      for (i = 0, len = adjV.length; i < len; i += 1) {
-	        nextVertex = adjV[i];
-	        if (!visited[nextVertex]) {
-	          q.push(nextVertex);
-	          visited[nextVertex] = true;
-	        }
-	      }
-	      level += 1;
-	    }
-	    return delEdges;
-	  };
 	
 	  for (v in adjlist) {
 	    if (adjlist.hasOwnProperty(v) && !visited[v]) {
-	      var edges = bfs(v, adjlist, visited);
-	      delEdges.push.apply(delEdges, _toConsumableArray(edges));
+	      var indices = bfs(v, adjlist, visited);
+	      groups.push(indices.map(function (i) {
+	        return nodes[i];
+	      }));
 	    }
 	  }
-	  return delEdges;
+	  return groups.map(function (g) {
+	    return g.filter(function (d) {
+	      return d;
+	    });
+	  });
 	}
 	
-	function biconnectedComponents(setData) {
-	  var fg = fullGraph(setData);
-	
-	  var nodes = fg.nodes;
-	  var links = fg.edges;
-	
-	  var vertices = nodes.map(function (d) {
-	    return d.index;
-	  });
-	  var edgeList = _lodash2.default.flatten(links.map(function (l) {
-	    var edge = [[l.source, l.target], [l.target, l.source]];
-	    return edge;
-	  }));
-	
-	  var adjList = convert_edgelist_to_adjlist(vertices, edgeList);
-	  // console.log("vertices", vertices);
-	  // console.log("edgelist", edgeList);
-	  // console.log("adjList", adjList);
-	
-	  var n = Object.keys(adjList).length; // number vertices
-	  // console.log("n", n);
-	  var result = [];
-	  // var m = 10; // number edges
-	
-	  var count = 0;
-	  var stack = []; // stack edge
-	  var visited = _d2.default.range(0, n).map(function () {
-	    return false;
-	  }); // boolean
-	  var low = []; // low points
-	  var d = []; // ??
-	  var parent = _d2.default.range(0, n).map(function () {
-	    return -1;
-	  });
-	
-	  for (var u = 0; u < n - 1; u++) {
-	    if (!visited[u]) {
-	      dfsVisit(u);
+	var bfs = function bfs(v, adjlist, visited) {
+	  var q = [];
+	  var current_group = [];
+	  var i, len, adjV, nextVertex;
+	  q.push(v);
+	  visited[v] = true;
+	  // var max = 10;
+	  while (q.length > 0) {
+	    v = q.shift();
+	    current_group.push(v);
+	    // Go through adjacency list of vertex v, and push any unvisited
+	    // vertex onto the queue.
+	    // This is more efficient than our earlier approach of going
+	    // through an edge list.
+	    adjV = adjlist[v];
+	    for (i = 0, len = adjV.length; i < len; i += 1) {
+	      nextVertex = adjV[i];
+	      if (!visited[nextVertex]) {
+	        q.push(nextVertex);
+	        visited[nextVertex] = true;
+	      }
 	    }
 	  }
+	  return current_group;
+	};
 	
-	  return result.map(function (g) {
-	    return _lodash2.default.uniq(g);
-	  });
-	
-	  function dfsVisit(u) {
-	    visited[u] = true;
-	    d[u] = low[u] = count++;
-	    // console.log("graph u", u, nodes[u]);
-	    var vs = adjList[u];
-	    // console.log("vs", vs);
-	    vs.forEach(function (e) {
-	      // console.log("e", e);
-	      var min = Math.min(u, e);
-	      var max = Math.max(u, e);
-	      var v = u === min ? max : min;
-	
-	      if (v == parent[u]) {
-	        return;
-	      }
-	      if (!visited[v]) {
-	        stack.push([u, e]);
-	        parent[v] = u;
-	        dfsVisit(v);
-	        if (low[v] >= d[u]) {
-	          outputComp(u, v);
-	        }
-	        low[u] = Math.min(low[u], low[v]);
-	      } else if (d[v] < d[u]) {
-	        stack.push([u, e]);
-	        low[u] = Math.min(low[u], d[v]);
-	      } else {
-	        // dont push edge on stack when v has been visited
-	        // and has distance more than that of u in the dfs tree
-	      }
-	    });
-	  }
-	
-	  function outputComp(u, v) {
-	    // console.log("New Biconnected Component Found");
-	    var check = [u, v];
-	    var comp = [];
-	
-	    while (stack.length > 0 && _lodash2.default.difference(check, e).length > 0) {
-	      var e = stack.pop();
-	      comp.push(e[0], e[1]);
-	      // var diff = _.difference(check, e);
-	      // console.log("check", check);
-	      // console.log("e", e);
-	    }
-	    // console.log("stack", stack);
-	    result.push(comp);
-	  }
-	  function fullGraph(setData) {
-	    // if (!data) return this._sets;
-	
-	    // TODO: filter out before
-	    var nodes = setData.filter(function (v) {
-	      return v.nodes.length > 0;
-	    });
-	
-	    nodes.forEach(function (d, i) {
-	      d.level = 0;
-	      d.index = i;
-	    });
-	
-	    var fociLinks = [];
-	    nodes.forEach(function (s) {
-	      nodes.forEach(function (t) {
-	        var interSet = _lodash2.default.intersection(s.sets, t.sets);
-	        // var linkExist = fociLinks.findIndex(l => (
-	        //   l.source === s.index && l.target === t.index || l.target === s.index && l.source === t.index)) === -1 ? false : true;
-	
-	        if (s.index !== t.index && interSet.length > 0) fociLinks.push({
-	          source: s.index,
-	          target: t.index,
-	          interSet: interSet
-	        });
-	      });
-	    });
-	
-	    var linkedByIndex = {};
-	    fociLinks.forEach(function (d) {
-	      linkedByIndex[d.source + "," + d.target] = true;
-	    });
-	
-	    return { nodes: nodes, edges: fociLinks };
-	  }
-	}
 	var convert_edgelist_to_adjlist = function convert_edgelist_to_adjlist(vertices, edgelist) {
 	  var adjlist = {};
 	  var i, len, pair, u, v;
@@ -26834,6 +26818,7 @@
 	      // vertex u is not in adjlist, create new adjacency list for it
 	      adjlist[u] = [v];
 	    }
+	    // two way
 	    if (adjlist[v]) {
 	      adjlist[v].push(u);
 	    } else {
@@ -26846,7 +26831,7 @@
 	  return adjlist;
 	};
 	
-	function deriveGroups(nodes) {
+	function deriveSets(nodes) {
 	  if (!nodes) return this._groups;
 	
 	  var realNodes = nodes.filter(function (d) {
@@ -26857,7 +26842,7 @@
 	  });
 	
 	  var spread_data = _lodash2.default.flatten(realNodes.map(function (n) {
-	    var clones = n.sets.map(function (t) {
+	    var clones = n.tags.map(function (t) {
 	      var clone = _lodash2.default.cloneDeep(n);
 	      clone.tag = t;
 	      return clone;
@@ -26891,12 +26876,7 @@
 	    return g;
 	  });
 	
-	  // var sortedGroups = _.sortBy(groups, g => g.values.length).reverse();
-	
-	  // console.log("sortedGroups", sortedGroups);
-	
 	  labelNodes.forEach(function (l) {
-	    var bool = false;
 	    groups.forEach(function (g) {
 	      if (l.interSet.indexOf(g.key) !== -1) {
 	        // l.text = g.id;
@@ -26904,10 +26884,9 @@
 	        // l.id = g.id + " label";
 	        // console.log("label with group!");
 	        g.values.push(l);
-	      } else bool = true;
+	      }
 	      // else console.log("label without group!");
 	    });
-	    console.log("label group", bool);
 	  });
 	
 	  // groups.forEach(d => {
@@ -26919,82 +26898,14 @@
 	
 	function start() {
 	
-	  function hierarchy(cur, nodes, linkedByIndex) {
-	    cur.children = neighbors(cur, linkedByIndex, nodes);
-	
-	    if (cur.children.length !== 0) cur.shallow = false;else cur.shallow = true;
-	
-	    cur.value = cur.children.length;
-	    // console.log("cur", cur);
-	    // console.log("cur children", cur.children);
-	
-	    cur.children.forEach(function (next) {
-	      hierarchy(next, nodes, linkedByIndex);
-	    });
-	  }
-	
-	  function addShallow(cur) {
-	
-	    // console.log("cur", cur);
-	    // console.log("cur children", cur.children);
-	    cur.children.forEach(function (next) {
-	      addShallow(next);
-	    });
-	
-	    if (!cur.shallow) {
-	      var copyNode = _lodash2.default.cloneDeep(cur);
-	      copyNode.shallow = true;
-	      copyNode.children = [];
-	
-	      var labelNode = _lodash2.default.cloneDeep(cur);
-	      labelNode.shallow = false;
-	      labelNode.label = true;
-	      labelNode.children = [];
-	      labelNode.text = labelNode.__key__ + " labelNode";
-	      labelNode.__key__ = labelNode.__key__ + " labelNode";
-	      labelNode.id = labelNode.__key__ + " labelNode";
-	      // console.log("__key__", labelNode.__key__);
-	      labelNode.nodes = [{
-	        id: labelNode.__key__ + " labelNode",
-	        "__key__": labelNode.__key__ + " labelNode",
-	        "__setKey__": labelNode.__key__ + " labelNode",
-	        label: true,
-	        // shallow: true,
-	        children: [],
-	        sets: cur.sets
-	      }];
-	      // labelNode.nodes = [];
-	
-	      if (!cur.root) {
-	        cur.children.push(copyNode, labelNode);
-	      }
-	      cur.nodes = [];
-	    }
-	  }
-	
 	  function runForce(nodes, links, that) {
 	    // .on("tick", ticked);
+	    console.log("CLOned LINX", _lodash2.default.cloneDeep(links));
 	
 	    // console.log("force Nodes", nodes);
 	    var center = that._size.map(function (d) {
 	      return d / 2;
 	    });
-	    // center[0]-= 300;
-	
-	    var simulation = _d3Force2.default.forceSimulation(nodes).force("charge", _d3Force2.default.forceManyBody().strength(-20).distanceMin(10).distanceMax(200)).force("link", _d3Force2.default.forceLink().distance(function (l) {
-	      return l.target.label ? 1 : 9;
-	    }).strength(1).iterations(4))
-	    // .force("position", d3_force.forcePosition());
-	    .force("collide", _d3Force2.default.forceCollide(function (d) {
-	      return d.label ? 0 : 7;
-	    })).force("center", _d3Force2.default.forceCenter.apply(_d3Force2.default, _toConsumableArray(center)));
-	
-	    // var force = d3.layout.force()
-	    //   .charge(d => that._charge(d)) // * d.size)
-	    //   .size(that.size())
-	    //   .gravity(that._gravity)
-	    //   .linkStrength(that._linkStrength)
-	    //   .linkDistance(d => that._linkDistance(d));
 	
 	    var linkedByIndex = {};
 	    links.forEach(function (l) {
@@ -27020,15 +26931,18 @@
 	      // });
 	    }));
 	
-	    // var uniqLabelNodes = _.uniq(labelNodes, d => d.id);
-	
 	    labelNodes.forEach(function (d, i) {
 	      return d.index = nodes.length + i;
 	    });
 	
-	    console.log("LABELNODES", labelNodes);
+	    // console.log("LABELNODES", labelNodes);
 	    var labelLinks = labelNodes.map(function (n) {
-	      return { source: n.parent.index, target: n.index };
+	      return {
+	        source: n.parent.index,
+	        target: n.index,
+	        cut: false,
+	        strength: 1
+	      };
 	    });
 	
 	    nodes.push.apply(nodes, _toConsumableArray(labelNodes));
@@ -27042,38 +26956,123 @@
 	    nodes.forEach(function (n) {
 	      n.parent = getParent(n, linkedByIndex, nodes);
 	      n.outLinks = outLinks(n, nodes, linkedByIndex);
+	      n.inLinks = inLinks(n, nodes, linkedByIndex);
 	    });
 	
-	    // console.log("labelNodes", labelNodes, "labelLinks", labelLinks);
-	    // console.log("NODES", nodes);
-	    // links = links.filter(l => nodes[l.source].outLinks.length > 1);
-	    // console.log("LINX", links);
+	    links.forEach(function (l) {
+	      if (isCutEdge(l, nodes, linkedByIndex)) l.cut = true;else l.cut = false;
+	    });
 	
-	    // nodes.forEach(d => {
-	    //   if (d.label) {
-	    //     d.width = 40;
-	    //     d.height = 30;
-	    //   } else {
-	    //     d.width = 6;
-	    //     d.height = 10;
-	    //   }
-	    //
-	    // });
+	    var simulation = _d3Force2.default.forceSimulation(nodes).force("charge", _d3Force2.default.forceManyBody().strength(-40)
+	    // .distanceMin(9)
+	    .distanceMax(200))
+	    // TODO: encapsulate in function
+	    .force("link", _d3Force2.default.forceLink().distance(function (l) {
+	      return l.target.label ? 1 : l.cut ? 100 : 9;
+	    }).strength(function (l) {
+	      var def = 1 / Math.min(l.source.outLinks.length, l.target.outLinks.length);
+	      return l.cut ? def : 1;
+	    }).iterations(4))
+	    // .force("position", d3_force.forcePosition());
+	    .force("collide", _d3Force2.default.forceCollide(function (d) {
+	      return d.label ? 0 : 7;
+	    })).force("specialCollide", function (alpha) {
+	      var quadtree = _d2.default.geom.quadtree(nodes);
+	      for (var i = 0, n = nodes.length; i < n; ++i) {
+	        var d = nodes[i];
+	        d.r = 40;
+	        var nx1 = d.x - d.r,
+	            nx2 = d.x + d.r,
+	            ny1 = d.y - d.r,
+	            ny2 = d.y + d.r;
+	        quadtree.visit(function (quad, x1, y1, x2, y2) {
+	          if (quad.point && quad.point !== d && quad.point.comp !== d.comp && !d.label && !quad.point.label) {
+	            // console.log("quad.point", quad.point.comp, d.comp)
+	            var x = d.x - quad.point.x,
+	                y = d.y - quad.point.y,
+	                l = Math.sqrt(x * x + y * y),
+	                r = d.r + quad.point.r;
+	
+	            if (l < r) {
+	              l = (l - r) / l * alpha;
+	              d.x -= x *= l;
+	              d.y -= y *= l;
+	              quad.point.x += x;
+	              quad.point.y += y;
+	            }
+	          }
+	          return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
+	        });
+	      }
+	    }).force("center", _d3Force2.default.forceCenter.apply(_d3Force2.default, _toConsumableArray(center)));
 	
 	    simulation.nodes(nodes);
 	    simulation.force("link").links(links);
-	    // .on("tick", ticked);
 	    simulation.stop();
 	
+	    // that._groups = deriveSets(comps);
+	
+	    // TODO: dirty hack
+	    that._sets = nodes;
+	
+	    that._reducedEdges = links.filter(function (l) {
+	      return !l.cut;
+	    });
+	    that._cutEdges = links.filter(function (l) {
+	      return l.cut;
+	    });
+	
+	    console.log("nODes", nodes);
+	    console.log("cutEdges", that._cutEdges);
+	
+	    var comps = simple_comp(nodes, that._reducedEdges).map(function (g, i) {
+	      var id = i + "comp";
+	      var compNodes = _lodash2.default.flatten(g.map(function (d) {
+	        return d.nodes;
+	      })).filter(function (d) {
+	        return d;
+	      });
+	      console.log("compNodes", compNodes);
+	      compNodes.forEach(function (cn) {
+	        nodes.forEach(function (n) {
+	          if (cn.__setKey__ === n.__key__) n.comp = id;
+	        });
+	      });
+	      // g.forEach(d => d.compId = id);
+	      var tags = _d2.default.nest().key(function (d) {
+	        return d;
+	      })
+	      // TODO: check it later
+	      .entries(_lodash2.default.flatten(compNodes.filter(function (d) {
+	        return d;
+	      }).map(function (d) {
+	        return d.tags;
+	      }))).sort(function (a, b) {
+	        return _d2.default.descending(a.values.length, b.values.length);
+	      });
+	
+	      return {
+	        id: id,
+	        values: g,
+	        tags: tags,
+	        // TODO: check later
+	        nodes: compNodes,
+	        sets: deriveSets(compNodes)
+	        // nodes: g
+	      };
+	    });
+	
+	    console.log("filter", nodes.filter(function (n) {
+	      return n.comp;
+	    }));
 	    for (var i = 0, n = Math.ceil(Math.log(simulation.alphaMin()) / -simulation.alphaDecay()); i < n; ++i) {
 	      simulation.tick();
 	    }
+	    console.log("LINX", links.map(function (l) {
+	      return l.strength;
+	    }));
 	
-	    that._groups = deriveGroups(nodes);
-	    // that._groups = gs;
-	
-	    // console.log("GS", gs);
-	    // console.log("Nodes after force", nodes.filter(d => d.label));
+	    that._comps = comps;
 	
 	    nodes.forEach(function (d) {
 	      // console.log("d", d);
@@ -27097,113 +27096,9 @@
 	        d.y = 0;
 	      }
 	    });
+	
 	    return nodes;
 	  }
-	
-	  // var diagonal = d3.svg.diagonal.radial()
-	  //     .projection(function(d) { return [d.y, d.x / 180 * Math.PI]; });
-	
-	  function runTree(nodes, that) {
-	
-	    var links = that.links();
-	    var linkedByIndex = {};
-	
-	    // var center = that._size.map(d => d/2);
-	    console.log("size", that._size);
-	    var pack = _d3Hierarchy2.default.pack().size(that._size)
-	    // .radius(d => d.data.label ? 10 : d.data.nodes.length * 5)
-	    .padding(0);
-	
-	    var root = {
-	      index: nodes.length,
-	      level: 0,
-	      "__key__": "root",
-	      root: true,
-	      sets: [],
-	      nodes: []
-	    };
-	
-	    nodes.forEach(function (d) {
-	      if (d.level === 1) {
-	        links.push({
-	          source: root.index,
-	          target: d.index
-	        });
-	      }
-	    });
-	
-	    nodes.push(root);
-	
-	    links.forEach(function (d) {
-	      linkedByIndex[d.source + "," + d.target] = true;
-	    });
-	
-	    var linkObjs = links.map(function (l) {
-	      l.source = nodes[l.source];
-	      l.target = nodes[l.target];
-	    });
-	
-	    hierarchy(root, nodes, linkedByIndex);
-	    addShallow(root);
-	
-	    var rootNode = _d3Hierarchy2.default.hierarchy(root);
-	
-	    // TODO: Bug ??
-	    rootNode.sum(function (d) {
-	      return d.nodes.length > 1 ? d.nodes.length * 3 : 30;
-	    });
-	    rootNode.sort(function (a, b) {
-	      return !b.data.label;
-	    });
-	    pack(rootNode);
-	
-	    var packed = rootNode.descendants();
-	
-	    packed.forEach(function (d) {
-	      d = _lodash2.default.merge(d, d.data);
-	      d.data.center = {
-	        x: d.x,
-	        y: d.y,
-	        r: d.r
-	      };
-	    });
-	
-	    // console.log("PACKED", packed);
-	
-	    var packedNodes = packed.map(function (d) {
-	      return d.data;
-	    });
-	    var shallowNodes = packed.filter(function (d) {
-	      return d.data.shallow;
-	    });
-	
-	    var labelNodes = packed.filter(function (d) {
-	      return d.data.label;
-	    });
-	
-	    // shallowNodes.forEach((d, i) => {
-	    //   d.index = i;
-	    // });
-	
-	    // console.log("shallow nodes", shallowNodes);
-	    // console.log("LABEL NODES", labelNodes);
-	
-	    that._links = linkObjs;
-	    // TODO: buggy
-	    var gs = that.deriveGroups(packed);
-	    console.log("GROUPS", gs);
-	    // labelNodes.forEach(l => {
-	    //   gs.for
-	    // })
-	    that._groups = gs;
-	
-	    // console.log("shallow", packed.filter(d => d.shallow));
-	
-	    return packed.map(function (d) {
-	      return d.data;
-	    });
-	  }
-	
 	  var nodes = this.sets();
 	  var links = this.links();
 	
@@ -27296,63 +27191,29 @@
 	  var nodes = _prepareGraph.nodes;
 	  var edges = _prepareGraph.edges;
 	
-	
-	  var bicomps = _lodash2.default.sortBy(biconnectedComponents(setData), function (d) {
-	    return d.length;
-	  }).reverse();
-	
-	  var bicut_edges = _lodash2.default.flatten(bicomps.map(function (c) {
-	    return c.filter(function (u) {
-	      var targets = bicomps.filter(function (c) {
-	        return c.find(function (v) {
-	          return v === u;
-	        });
-	      });
-	      // return n.length > 1;
-	      return targets.map(function (t) {
-	        return { source: u, target: t };
-	      });
-	    });
-	  }).filter(function (s) {
-	    return s > 0;
-	  }));
-	
-	  console.log("bicut edges", bicut_edges);
-	  console.log("bicomps", bicomps);
-	  // console.log("cut_vertices", bicut_vertices);
-	
-	  // console.log("delEdges", delEdges, "del len", delEdges.length, "edges", edges.length);
-	
-	  // TODO: check later
-	  // var delEdges = edges.filter(e => cut_vertices.indexOf(e.target) === -1);
-	  var cut_edges = crop_graph(nodes, edges);
-	  cut_edges.push.apply(cut_edges, _toConsumableArray(bicut_edges));
-	
-	  var cut_vertices = _lodash2.default.flatten(cut_edges.map(function (e) {
-	    return [e.source, e.target];
-	  }));
-	
-	  console.log("cut_edges", cut_edges);
-	
-	  var delEdges = edges.filter(function (e) {
-	    return cut_vertices.indexOf(e.target) === -1;
-	  });
-	
-	  this._bicomps = bicomps.map(function (g) {
-	    return g.map(function (i) {
-	      return setData[i];
-	    });
-	  });
-	  nodes.forEach(function (d, i) {
-	    if (cut_vertices.indexOf(i) !== -1) d.cut = true;
-	  });
-	
-	  // console.log("Biconnected COmps", bicomps);
+	  console.log("EDGES", edges);
 	
 	  this._sets = nodes;
+	  var linkedByIndex = {};
+	  edges.forEach(function (l) {
+	    linkedByIndex[l.source + "," + l.target] = l;
+	  });
 	
-	  this._fociLinks = delEdges;
-	  this._allLinks = edges;
+	  this._reducedEdges = edges.filter(function (l) {
+	    // return l.level % maxDepth !== 0;// || targetDeg === 0;
+	    return !isCutEdge(l, nodes, linkedByIndex);
+	  });
+	  // console.log("Biconnected COmps", bicomps);
+	
+	  // this._bicomps = bicomps.map(g => g.map(i => setData[i]));
+	  this._cutEdges = edges.filter(function (l) {
+	    return l.level % maxDepth === 0; // && targetDeg > 0;
+	  });
+	  this._fociLinks = edges;
+	  // .filter(e => cut_vertices.indexOf(e.target) === -1);
+	  // .concat(this._cutEdges);
+	  // .filter(e => crop_edges.find(c => c.source === e.source && c.target === e.target) ? false : true);
+	  // this._allLinks = edges;
 	
 	  return this;
 	}
@@ -27380,7 +27241,8 @@
 	      if (s.index !== t.index && interSet.length > 0) fociLinks.push({
 	        source: s.index,
 	        target: t.index,
-	        interSet: interSet
+	        interSet: interSet,
+	        strength: t.sets.length / s.sets.length
 	      });
 	    });
 	  });
@@ -27420,7 +27282,7 @@
 	      var startNode = nodes[startIndex];
 	
 	      startNode.level = level;
-	      level += 1;
+	      // level += 1;
 	      // console.log("startLevel", startNode.level);
 	
 	      G.nodes.push(startNode);
@@ -27464,11 +27326,12 @@
 	            // TODO:
 	            // console.log("filterOut", filterOut);
 	            G.edges = _lodash2.default.difference(G.edges, filterOut);
-	
 	            G.edges.push({
 	              source: u,
 	              target: v,
-	              interSet: _lodash2.default.intersection(nodes[u].sets, nodes[v].sets)
+	              interSet: _lodash2.default.intersection(nodes[u].sets, nodes[v].sets),
+	              level: level,
+	              strength: nodes[v].sets.length / nodes[u].sets.length
 	            });
 	          } else {
 	            G.vertices.push(v);
@@ -27479,7 +27342,9 @@
 	            G.edges.push({
 	              source: u,
 	              target: v,
-	              interSet: _lodash2.default.intersection(nodes[u].sets, nodes[v].sets)
+	              interSet: _lodash2.default.intersection(nodes[u].sets, nodes[v].sets),
+	              level: level,
+	              strength: nodes[v].sets.length / nodes[u].sets.length
 	            });
 	            q.push(v);
 	
@@ -27493,7 +27358,7 @@
 	            }).reverse();
 	          }
 	        });
-	        level = level + 1;
+	        level += 1;
 	        visitedTags.push.apply(visitedTags, _toConsumableArray(nodes[u].sets));
 	      }
 	      return G;
@@ -27536,73 +27401,6 @@
 	      linkedByIndex: linkedByIndex
 	    };
 	  }
-	  // console.log("sv", sv);
-	  // while(sv.length !== 0) {
-	  // var cur = sv.pop();
-	  // var neighbors = nbs(cur, linkedByIndex, sv);
-	  // simpleComps.push([cur].concat(neighbors));
-	  // hierarchy.push({node: nodes[cur], nbs: neighbors.map(n => nodes[n])});
-	  // sv = _.difference(sv, neighbors);
-	
-	  // var cur = sv.pop();
-	  // var curNode = nodes[cur];
-	  // induceNbs(curNode);
-	  // hierarchy.push(curNode);
-	  // console.log("nodes[cur]", nodes[cur]);
-	  // sv = [];
-	  // var neighbors = [];
-	  // var nbObjs = neighbors.map(i => nodes[i]);
-	  // console.log("seen", seen);
-	  // console.log("sv", sv);
-	  // sv = _.difference(sv, seen);
-	  // hierarchy.push({node: nodes[cur], nbs: nbObjs});
-	  // console.log("result", result);
-	  // sv = [];
-	
-	  // console.log("cur", nodes[cur]);
-	  // console.log("nbs", neighbors);
-	  // console.log("sv", sv);
-	  // }
-	  // console.log("simpleComps", simpleComps);
-	  // console.log("hierarchy", hierarchy);
-	
-	  // var simpleCompNodes = simpleComps.map(c => c.map(i => nodes[i]));
-	  // console.log("simpleCompNodes", simpleCompNodes);
-	  // var clusters = hierarchy.map(n => {
-	  //   var sets = _.uniq(_.flatten(n.nbs.map(n => n.sets)));
-	  //   var intersets = _.intersection(...n.nbs.map(n => n.sets));
-	  //   n.otherKey = sets.join(",");
-	  //   n.interkey = intersets.join(",");
-	  //   n.otherSets = sets;
-	  //   return n;
-	  // });
-	  // console.log("clusters", clusters);
-	
-	  // // console.log("adjList", adjList);
-	  //
-	  //
-	  // var cut_vertices = _.uniq(_.flatten(comps.map(c => {
-	  //   return c.filter(u => {
-	  //     var n = comps.filter(c => c.find(v => v === u) ? true : false);
-	  //     return n.length > 1;
-	  //   });
-	  // }).filter(s => s > 0)));
-	  //
-	  // // console.log("cut_vertices", cut_vertices);
-	  //
-	  // nodes.forEach((d, i) => {
-	  //   if (cut_vertices.indexOf(i) !== -1 ) d.cut = true;
-	  // });
-	  //
-	  // var biComps = comps.map(c => c.filter(v => cut_vertices.indexOf(v) === -1));
-	  // var biCompNodes = biComps.map(c => c.map(i => nodes[i]));
-	
-	  // console.log("biconnected components", biCompNodes);
-	
-	  // this._sets = G.nodes;
-	  // this._fociLinks = G.edges;
-	
-	  // return this;
 	}
 	
 	function charge(func) {
@@ -27659,6 +27457,15 @@
 	  return links;
 	}
 	
+	function inLinks(a, nodes, linkedByIndex) {
+	  var links = [];
+	  for (var property in linkedByIndex) {
+	    var s = property.split(",");
+	    if (s[1] == a.index && linkedByIndex[property]) links.push(linkedByIndex[property]);
+	  }
+	  return links;
+	}
+	
 	function hasConnections(a, linkedByIndex) {
 	  for (var property in linkedByIndex) {
 	    var s = property.split(",");
@@ -27681,43 +27488,6 @@
 	    if (s[1] == a.index && linkedByIndex[property]) return nodes[s[0]];
 	  }
 	  return null;
-	}
-	// function nbsIndex(a, linkedByIndex) {
-	//   var nbs = 0;
-	//   for (var property in linkedByIndex) {
-	//     var s = property.split(",");
-	//     if ((s[0] == a) nbs.push(s[1])
-	//     else if(s[])
-	//       connections++;
-	//   }
-	//   return connections;
-	// }
-	
-	function neighbors(a, linkedByIndex, nodes) {
-	  var nb;
-	  var nbs = [];
-	
-	  // console.log("a", a);
-	  for (var property in linkedByIndex) {
-	    var s = property.split(",").map(function (d) {
-	      return parseInt(d);
-	    });
-	    if (s[0] === a.index) {
-	      // console.log("s[1]", s[1]);
-	      nb = nodes[s[1]];
-	      // console.log("nb", nb);
-	      nbs.push(nb);
-	    }
-	    // else {
-	    //   if (s[1] === a.index) {
-	    //     console.log("s[0]", s[0]);
-	    //     nb = nodes[s[0]];
-	    //     console.log("nb", nb);
-	    //     nbs.push(nb);
-	    //   }
-	    // }
-	  }
-	  return nbs;
 	}
 	
 	// TODO: rename
@@ -27770,22 +27540,6 @@
 	  return _lodash2.default.uniq(nbs);
 	}
 	
-	// function neighbors(a, linkedByIndex, nodes) {
-	//   var nbs = [];
-	//   for (var property in linkedByIndex) {
-	//     var s = property.split(",").map(d => parseInt(d));
-	//     if (s[0] === a && nodes.indexOf(s[1]) !== -1) {
-	//       nbs.push(nodes[s[1]]);
-	//     }
-	//     else {
-	//       if (s[1] === a && nodes.indexOf(s[0]) !== -1) {
-	//         nbs.push(nodes[s[0]]);
-	//       }
-	//     }
-	//   }
-	//   return nbs;
-	// }
-	
 	var d3Foci = function d3Foci() {
 	  return {
 	    _sets: null,
@@ -27802,6 +27556,7 @@
 	    _clusterSize: function _clusterSize(d) {
 	      return d;
 	    },
+	    _cutEdges: [],
 	
 	    _orientation: Math.PI / 2,
 	    _normalize: true,
@@ -27817,9 +27572,15 @@
 	    gravity: gravity,
 	    start: start,
 	    links: links,
-	    groups: deriveGroups,
-	    bicomps: function bicomps() {
-	      return this._bicomps;
+	    groups: deriveSets,
+	    comps: function comps() {
+	      return this._comps;
+	    },
+	    cutEdges: function cutEdges() {
+	      return this._cutEdges;
+	    },
+	    reducedEdges: function reducedEdges() {
+	      return this._reducedEdges;
 	    },
 	
 	    connections: connections,
@@ -27837,7 +27598,7 @@
 	  (factory((global.d3_force = global.d3_force || {}),global.d3_quadtree,global.d3_collection,global.d3_dispatch,global.d3_timer));
 	}(this, function (exports,d3Quadtree,d3Collection,d3Dispatch,d3Timer) { 'use strict';
 	
-	  var version = "0.5.0";
+	  var version = "0.6.3";
 	
 	  function center(x, y) {
 	    var nodes;
@@ -27897,61 +27658,66 @@
 	  function collide(radius) {
 	    var nodes,
 	        radii,
-	        radiusMax,
-	        strength = 0.7,
+	        strength = 1,
 	        iterations = 1;
 	
 	    if (typeof radius !== "function") radius = constant(radius == null ? 1 : +radius);
 	
 	    function force() {
 	      var i, n = nodes.length,
-	          tree = d3Quadtree.quadtree(nodes, x, y),
+	          tree,
 	          node,
-	          nx,
-	          ny,
-	          nr,
-	          vx,
-	          vy,
-	          nx0,
-	          ny0,
-	          nx1,
-	          ny1;
+	          xi,
+	          yi,
+	          ri,
+	          ri2;
 	
 	      for (var k = 0; k < iterations; ++k) {
+	        tree = d3Quadtree.quadtree(nodes, x, y).visitAfter(prepare);
 	        for (i = 0; i < n; ++i) {
-	          node = nodes[i], nr = radii[i] + radiusMax, vx = vy = 0;
-	          nx = node.x + node.vx, nx0 = nx - nr, nx1 = nx + nr;
-	          ny = node.y + node.vy, ny0 = ny - nr, ny1 = ny + nr;
-	          tree.remove(node).visit(apply);
-	          node.vx += vx * strength, node.vy += vy * strength;
-	          tree.add(node);
+	          node = nodes[i];
+	          ri = radii[i], ri2 = ri * ri;
+	          xi = node.x + node.vx;
+	          yi = node.y + node.vy;
+	          tree.visit(apply);
 	        }
 	      }
 	
 	      function apply(quad, x0, y0, x1, y1) {
-	        if (x0 > nx1 || x1 < nx0 || y0 > ny1 || y1 < ny0) return true;
-	        if (quad.length) return;
-	        var x = nx - quad.data.x - quad.data.vx || jiggle(),
-	            y = ny - quad.data.y - quad.data.vy || jiggle(),
-	            l = x * x + y * y,
-	            r = radii[i] + radii[quad.data.index];
-	        if (l < r * r) {
-	          l = Math.sqrt(l);
-	          l = (r - l) / l;
-	          vx += x * l, vy += y * l;
+	        var data = quad.data, rj = quad.r, r = ri + rj;
+	        if (data) {
+	          if (data.index > i) {
+	            var x = xi - data.x - data.vx,
+	                y = yi - data.y - data.vy,
+	                l = x * x + y * y;
+	            if (l < r * r) {
+	              if (x === 0) x = jiggle(), l += x * x;
+	              if (y === 0) y = jiggle(), l += y * y;
+	              l = (r - (l = Math.sqrt(l))) / l * strength;
+	              node.vx += (x *= l) * (r = (rj *= rj) / (ri2 + rj));
+	              node.vy += (y *= l) * r;
+	              data.vx -= x * (r = 1 - r);
+	              data.vy -= y * r;
+	            }
+	          }
+	          return;
+	        }
+	        return x0 > xi + r || x1 < xi - r || y0 > yi + r || y1 < yi - r;
+	      }
+	    }
+	
+	    function prepare(quad) {
+	      if (quad.data) return quad.r = radii[quad.data.index];
+	      for (var i = quad.r = 0; i < 4; ++i) {
+	        if (quad[i] && quad[i].r > quad.r) {
+	          quad.r = quad[i].r;
 	        }
 	      }
 	    }
 	
 	    force.initialize = function(_) {
-	      var i, n = (nodes = _).length, r;
-	      radii = new Array(n);
-	      radiusMax = 0;
-	      for (i = 0; i < n; ++i) {
-	        if ((radii[i] = r = +radius(nodes[i], i, nodes)) > radiusMax) {
-	          radiusMax = r;
-	        }
-	      }
+	      var i, n = (nodes = _).length; radii = new Array(n);
+	      for (i = 0; i < n; ++i) radii[i] = +radius(nodes[i], i, nodes);
 	    };
 	
 	    force.iterations = function(_) {
@@ -27975,15 +27741,20 @@
 	
 	  function link(links) {
 	    var id = index,
-	        strength = constant(0.7),
+	        strength = defaultStrength,
 	        strengths,
 	        distance = constant(30),
 	        distances,
 	        nodes,
+	        count,
 	        bias,
 	        iterations = 1;
 	
 	    if (links == null) links = [];
+	
+	    function defaultStrength(link) {
+	      return 1 / Math.min(count[link.source.index], count[link.target.index]);
+	    }
 	
 	    function force(alpha) {
 	      for (var k = 0, n = links.length; k < iterations; ++k) {
@@ -28008,22 +27779,21 @@
 	      var i,
 	          n = nodes.length,
 	          m = links.length,
-	          count = new Array(n),
 	          nodeById = d3Collection.map(nodes, id),
 	          link;
 	
-	      for (i = 0; i < n; ++i) {
+	      for (i = 0, count = new Array(n); i < n; ++i) {
 	        count[i] = 0;
 	      }
 	
-	      for (i = 0, bias = new Array(m); i < m; ++i) {
+	      for (i = 0; i < m; ++i) {
 	        link = links[i], link.index = i;
 	        if (typeof link.source !== "object") link.source = nodeById.get(link.source);
 	        if (typeof link.target !== "object") link.target = nodeById.get(link.target);
 	        ++count[link.source.index], ++count[link.target.index];
 	      }
 	
-	      for (i = 0; i < m; ++i) {
+	      for (i = 0, bias = new Array(m); i < m; ++i) {
 	        link = links[i], bias[i] = count[link.source.index] / (count[link.source.index] + count[link.target.index]);
 	      }
 	
@@ -28035,7 +27805,7 @@
 	      if (!nodes) return;
 	
 	      for (var i = 0, n = links.length; i < n; ++i) {
-	        strengths[i] = +strength(links[i]);
+	        strengths[i] = +strength(links[i], i, links);
 	      }
 	    }
 	
@@ -28043,7 +27813,7 @@
 	      if (!nodes) return;
 	
 	      for (var i = 0, n = links.length; i < n; ++i) {
-	        distances[i] = +distance(links[i]);
+	        distances[i] = +distance(links[i], i, links);
 	      }
 	    }
 	
@@ -28087,50 +27857,49 @@
 	  var initialAngle = Math.PI * (3 - Math.sqrt(5));
 	  function simulation(nodes) {
 	    var simulation,
-	        iteration = 0,
+	        alpha = 1,
 	        alphaMin = 0.001,
-	        alphaDecay = -0.02,
+	        alphaDecay = 1 - Math.pow(alphaMin, 1 / 300),
+	        alphaTarget = 0,
 	        drag = 0.6,
 	        forces = d3Collection.map(),
+	        fixes = {},
 	        stepper = d3Timer.timer(step),
 	        event = d3Dispatch.dispatch("tick", "end");
 	
 	    if (nodes == null) nodes = [];
 	
-	    function restart() {
-	      iteration = 0;
-	      stepper.restart(step);
-	      return simulation;
-	    }
-	
-	    function stop() {
-	      stepper.stop();
-	      return simulation;
-	    }
-	
 	    function step() {
-	      var stop = tick();
+	      tick();
 	      event.call("tick", simulation);
-	      if (stop) {
+	      if (alpha < alphaMin) {
 	        stepper.stop();
 	        event.call("end", simulation);
 	      }
 	    }
 	
 	    function tick() {
-	      var alpha = Math.exp(++iteration * alphaDecay);
+	      var i, n = nodes.length, node, fix;
+	
+	      alpha += (alphaTarget - alpha) * alphaDecay;
 	
 	      forces.each(function(force) {
 	        force(alpha);
 	      });
 	
-	      for (var i = 0, n = nodes.length, node; i < n; ++i) {
+	      for (i = 0; i < n; ++i) {
 	        node = nodes[i];
 	        node.x += node.vx *= drag;
 	        node.y += node.vy *= drag;
 	      }
 	
-	      return alpha < alphaMin;
+	      for (i in fixes) {
+	        fix = fixes[i], node = nodes[i];
+	        node.x = fix.x;
+	        node.y = fix.y;
+	        node.vx =
+	        node.vy = 0;
+	      }
 	    }
 	
 	    function initializeNodes() {
@@ -28155,20 +27924,34 @@
 	    initializeNodes();
 	
 	    return simulation = {
-	      restart: restart,
-	      stop: stop,
 	      tick: tick,
+	
+	      restart: function() {
+	        return stepper.restart(step), simulation;
+	      },
+	
+	      stop: function() {
+	        return stepper.stop(), simulation;
+	      },
 	
 	      nodes: function(_) {
 	        return arguments.length ? (nodes = _, initializeNodes(), forces.each(initializeForce), simulation) : nodes;
 	      },
 	
+	      alpha: function(_) {
+	        return arguments.length ? (alpha = +_, simulation) : alpha;
+	      },
+	
 	      alphaMin: function(_) {
-	        return arguments.length ? (alphaMin = _, simulation) : alphaMin;
+	        return arguments.length ? (alphaMin = +_, simulation) : alphaMin;
 	      },
 	
 	      alphaDecay: function(_) {
-	        return arguments.length ? (iteration = +_ ? Math.round(iteration * alphaDecay / -_) : 0, alphaDecay = -_, simulation) : -alphaDecay;
+	        return arguments.length ? (alphaDecay = +_, simulation) : +alphaDecay;
+	      },
+	
+	      alphaTarget: function(_) {
+	        return arguments.length ? (alphaTarget = +_, simulation) : alphaTarget;
 	      },
 	
 	      drag: function(_) {
@@ -28177,6 +27960,37 @@
 	
 	      force: function(name, _) {
 	        return arguments.length > 1 ? ((_ == null ? forces.remove(name) : forces.set(name, initializeForce(_))), simulation) : forces.get(name);
+	      },
+	
+	      fix: function(node, x, y) {
+	        return fixes[node.index] = {x: x == null ? node.x : +x, y: y == null ? node.y : +y}, simulation;
+	      },
+	
+	      unfix: function(node) {
+	        return delete fixes[node.index], simulation;
+	      },
+	
+	      find: function(x, y, radius) {
+	        var i = 0,
+	            n = nodes.length,
+	            dx,
+	            dy,
+	            d2,
+	            node,
+	            closest;
+	
+	        if (radius == null) radius = Infinity;
+	        else radius *= radius;
+	
+	        for (i = 0; i < n; ++i) {
+	          node = nodes[i];
+	          dx = x - node.x;
+	          dy = y - node.y;
+	          d2 = dx * dx + dy * dy;
+	          if (d2 < radius) closest = node, radius = d2;
+	        }
+	
+	        return closest;
 	      },
 	
 	      on: function(name, _) {
@@ -28189,7 +28003,7 @@
 	    var nodes,
 	        node,
 	        alpha,
-	        strength = constant(-100),
+	        strength = constant(-30),
 	        strengths,
 	        distanceMin2 = 1,
 	        distanceMax2 = Infinity,
@@ -28315,8 +28129,7 @@
 	      strengths = new Array(n);
 	      xz = new Array(n);
 	      for (i = 0; i < n; ++i) {
-	        strengths[i] = +strength(nodes[i], i, nodes);
-	        xz[i] = +x(nodes[i], i, nodes);
+	        strengths[i] = isNaN(xz[i] = +x(nodes[i], i, nodes)) ? 0 : +strength(nodes[i], i, nodes);
 	      }
 	    }
 	
@@ -28356,8 +28169,7 @@
 	      strengths = new Array(n);
 	      yz = new Array(n);
 	      for (i = 0; i < n; ++i) {
-	        strengths[i] = +strength(nodes[i], i, nodes);
-	        yz[i] = +y(nodes[i], i, nodes);
+	        strengths[i] = isNaN(yz[i] = +y(nodes[i], i, nodes)) ? 0 : +strength(nodes[i], i, nodes);
 	      }
 	    }
 	
@@ -28398,7 +28210,7 @@
 	  (factory((global.d3_quadtree = global.d3_quadtree || {})));
 	}(this, function (exports) { 'use strict';
 	
-	  var version = "0.7.1";
+	  var version = "0.7.3";
 	
 	  function tree_add(d) {
 	    var x = +this._x.call(null, d),
@@ -28489,14 +28301,10 @@
 	  function tree_cover(x, y) {
 	    if (isNaN(x = +x) || isNaN(y = +y)) return this; // ignore invalid points
 	
-	    var node = this._root,
-	        parent,
-	        i,
-	        x0 = this._x0,
+	    var x0 = this._x0,
 	        y0 = this._y0,
 	        x1 = this._x1,
-	        y1 = this._y1,
-	        z = x1 - x0;
+	        y1 = this._y1;
 	
 	    // If the quadtree has no extent, initialize them.
 	    // Integer extent are necessary so that if we later double the extent,
@@ -28508,6 +28316,11 @@
 	
 	    // Otherwise, double repeatedly to cover.
 	    else if (x0 > x || x > x1 || y0 > y || y > y1) {
+	      var z = x1 - x0,
+	          node = this._root,
+	          parent,
+	          i;
+	
 	      switch (i = (y < (y0 + y1) / 2) << 1 | (x < (x0 + x1) / 2)) {
 	        case 0: {
 	          do parent = new Array(4), parent[i] = node, node = parent;
@@ -28533,6 +28346,9 @@
 	
 	      if (this._root && this._root.length) this._root = node;
 	    }
+	
+	    // If the quadtree covers the point already, just return.
+	    else return this;
 	
 	    this._x0 = x0;
 	    this._y0 = y0;
@@ -28563,9 +28379,8 @@
 	    this.y1 = y1;
 	  }
 	
-	  function tree_find(x, y) {
-	    var minDistance2 = Infinity,
-	        minPoint,
+	  function tree_find(x, y, radius) {
+	    var data,
 	        x0 = this._x0,
 	        y0 = this._y0,
 	        x1,
@@ -28580,6 +28395,12 @@
 	        i;
 	
 	    if (node) quads.push(new Quad(node, x0, y0, x3, y3));
+	    if (radius == null) radius = Infinity;
+	    else {
+	      x0 = x - radius, y0 = y - radius;
+	      x3 = x + radius, y3 = y + radius;
+	      radius *= radius;
+	    }
 	
 	    while (q = quads.pop()) {
 	
@@ -28615,16 +28436,16 @@
 	        var dx = x - +this._x.call(null, node.data),
 	            dy = y - +this._y.call(null, node.data),
 	            d2 = dx * dx + dy * dy;
-	        if (d2 < minDistance2) {
-	          var d = Math.sqrt(minDistance2 = d2);
+	        if (d2 < radius) {
+	          var d = Math.sqrt(radius = d2);
 	          x0 = x - d, y0 = y - d;
 	          x3 = x + d, y3 = y + d;
-	          minPoint = node.data;
+	          data = node.data;
 	        }
 	      }
 	    }
 	
-	    return minPoint;
+	    return data;
 	  }
 	
 	  function tree_remove(d) {
@@ -28829,6 +28650,8 @@
 	  (factory((global.d3_collection = global.d3_collection || {})));
 	}(this, function (exports) { 'use strict';
 	
+	  var version = "0.2.0";
+	
 	  var prefix = "$";
 	
 	  function Map() {}
@@ -28911,8 +28734,8 @@
 	        nest;
 	
 	    function apply(array, depth, createResult, setResult) {
-	      if (depth >= keys.length) return rollup
-	          ? rollup(array) : (sortValues
+	      if (depth >= keys.length) return rollup != null
+	          ? rollup(array) : (sortValues != null
 	          ? array.sort(sortValues)
 	          : array);
 	
@@ -28941,18 +28764,11 @@
 	    }
 	
 	    function entries(map, depth) {
-	      if (depth >= keys.length) return map;
-	
-	      var array = [],
-	          sortKey = sortKeys[depth++];
-	
-	      map.each(function(value, key) {
-	        array.push({key: key, values: entries(value, depth)});
-	      });
-	
-	      return sortKey
-	          ? array.sort(function(a, b) { return sortKey(a.key, b.key); })
-	          : array;
+	      if (++depth > keys.length) return map;
+	      var array, sortKey = sortKeys[depth - 1];
+	      if (rollup != null && depth >= keys.length) array = map.entries();
+	      else array = [], map.each(function(v, k) { array.push({key: k, values: entries(v, depth)}); });
+	      return sortKey != null ? array.sort(function(a, b) { return sortKey(a.key, b.key); }) : array;
 	    }
 	
 	    return nest = {
@@ -29036,8 +28852,6 @@
 	    return entries;
 	  }
 	
-	  var version = "0.1.2";
-	
 	  exports.version = version;
 	  exports.nest = nest;
 	  exports.set = set;
@@ -29058,13 +28872,13 @@
 	  (factory((global.d3_dispatch = global.d3_dispatch || {})));
 	}(this, function (exports) { 'use strict';
 	
-	  var version = "0.4.3";
+	  var version = "0.4.4";
 	
 	  var noop = {value: function() {}};
 	
 	  function dispatch() {
 	    for (var i = 0, n = arguments.length, _ = {}, t; i < n; ++i) {
-	      if (!(t = arguments[i] + "") || (t in _)) throw new Error;
+	      if (!(t = arguments[i] + "") || (t in _)) throw new Error("illegal type: " + t);
 	      _[t] = [];
 	    }
 	    return new Dispatch(_);
@@ -29078,7 +28892,7 @@
 	    return typenames.trim().split(/^|\s+/).map(function(t) {
 	      var name = "", i = t.indexOf(".");
 	      if (i >= 0) name = t.slice(i + 1), t = t.slice(0, i);
-	      if (t && !types.hasOwnProperty(t)) throw new Error;
+	      if (t && !types.hasOwnProperty(t)) throw new Error("unknown type: " + t);
 	      return {type: t, name: name};
 	    });
 	  }
@@ -29100,7 +28914,7 @@
 	
 	      // If a type was specified, set the callback for the given type and name.
 	      // Otherwise, if a null callback was specified, remove callbacks of the given name.
-	      if (callback != null && typeof callback !== "function") throw new Error;
+	      if (callback != null && typeof callback !== "function") throw new Error("invalid callback: " + callback);
 	      while (++i < n) {
 	        if (t = (typename = T[i]).type) _[t] = set(_[t], typename.name, callback);
 	        else if (callback == null) for (t in _) _[t] = set(_[t], typename.name, null);
@@ -29114,11 +28928,12 @@
 	      return new Dispatch(copy);
 	    },
 	    call: function(type, that) {
-	      if ((n = arguments.length - 2) > 0) for (var args = new Array(n), i = 0, n; i < n; ++i) args[i] = arguments[i + 2];
-	      this.apply(type, that, args);
+	      if ((n = arguments.length - 2) > 0) for (var args = new Array(n), i = 0, n, t; i < n; ++i) args[i] = arguments[i + 2];
+	      if (!this._.hasOwnProperty(type)) throw new Error("unknown type: " + type);
+	      for (t = this._[type], i = 0, n = t.length; i < n; ++i) t[i].value.apply(that, args);
 	    },
 	    apply: function(type, that, args) {
-	      if (!this._.hasOwnProperty(type)) throw new Error;
+	      if (!this._.hasOwnProperty(type)) throw new Error("unknown type: " + type);
 	      for (var t = this._[type], i = 0, n = t.length; i < n; ++i) t[i].value.apply(that, args);
 	    }
 	  };
@@ -29157,7 +28972,7 @@
 	  (factory((global.d3_timer = global.d3_timer || {})));
 	}(this, function (exports) { 'use strict';
 	
-	  var version = "0.4.3";
+	  var version = "0.4.4";
 	
 	  var frame = 0;
 	  var timeout = 0;
@@ -29169,7 +28984,9 @@
 	  var clockNow = 0;
 	  var clockSkew = 0;
 	  var clock = typeof performance === "object" ? performance : Date;
-	  var setFrame = typeof requestAnimationFrame === "function" ? requestAnimationFrame : function(callback) { return setTimeout(callback, 17); };
+	  var setFrame = typeof requestAnimationFrame === "function"
+	          ? (clock === Date ? function(f) { requestAnimationFrame(function() { f(clock.now()); }); } : requestAnimationFrame)
+	          : function(f) { setTimeout(f, 17); };
 	  function now() {
 	    return clockNow || (setFrame(clearNow), clockNow = clock.now() + clockSkew);
 	  }
@@ -29303,1239 +29120,6 @@
 /* 11 */
 /***/ function(module, exports, __webpack_require__) {
 
-	(function (global, factory) {
-	   true ? factory(exports) :
-	  typeof define === 'function' && define.amd ? define(['exports'], factory) :
-	  (factory((global.d3_hierarchy = global.d3_hierarchy || {})));
-	}(this, function (exports) { 'use strict';
-	
-	  var version = "0.2.1";
-	
-	  function defaultSeparation(a, b) {
-	    return a.parent === b.parent ? 1 : 2;
-	  }
-	
-	  function meanX(children) {
-	    return children.reduce(meanXReduce, 0) / children.length;
-	  }
-	
-	  function meanXReduce(x, c) {
-	    return x + c.x;
-	  }
-	
-	  function maxY(children) {
-	    return 1 + children.reduce(maxYReduce, 0);
-	  }
-	
-	  function maxYReduce(y, c) {
-	    return Math.max(y, c.y);
-	  }
-	
-	  function leafLeft(node) {
-	    var children;
-	    while (children = node.children) node = children[0];
-	    return node;
-	  }
-	
-	  function leafRight(node) {
-	    var children;
-	    while (children = node.children) node = children[children.length - 1];
-	    return node;
-	  }
-	
-	  function cluster() {
-	    var separation = defaultSeparation,
-	        dx = 1,
-	        dy = 1,
-	        nodeSize = false;
-	
-	    function cluster(root) {
-	      var previousNode,
-	          x = 0;
-	
-	      // First walk, computing the initial x & y values.
-	      root.eachAfter(function(node) {
-	        var children = node.children;
-	        if (children) {
-	          node.x = meanX(children);
-	          node.y = maxY(children);
-	        } else {
-	          node.x = previousNode ? x += separation(node, previousNode) : 0;
-	          node.y = 0;
-	          previousNode = node;
-	        }
-	      });
-	
-	      var left = leafLeft(root),
-	          right = leafRight(root),
-	          x0 = left.x - separation(left, right) / 2,
-	          x1 = right.x + separation(right, left) / 2;
-	
-	      // Second walk, normalizing x & y to the desired size.
-	      return root.eachAfter(nodeSize ? function(node) {
-	        node.x = (node.x - root.x) * dx;
-	        node.y = (root.y - node.y) * dy;
-	      } : function(node) {
-	        node.x = (node.x - x0) / (x1 - x0) * dx;
-	        node.y = (1 - (root.y ? node.y / root.y : 1)) * dy;
-	      });
-	    }
-	
-	    cluster.separation = function(x) {
-	      return arguments.length ? (separation = x, cluster) : separation;
-	    };
-	
-	    cluster.size = function(x) {
-	      return arguments.length ? (nodeSize = false, dx = +x[0], dy = +x[1], cluster) : (nodeSize ? null : [dx, dy]);
-	    };
-	
-	    cluster.nodeSize = function(x) {
-	      return arguments.length ? (nodeSize = true, dx = +x[0], dy = +x[1], cluster) : (nodeSize ? [dx, dy] : null);
-	    };
-	
-	    return cluster;
-	  }
-	
-	  function node_each(callback) {
-	    var node = this, current, next = [node], children, i, n;
-	    do {
-	      current = next.reverse(), next = [];
-	      while (node = current.pop()) {
-	        callback(node), children = node.children;
-	        if (children) for (i = 0, n = children.length; i < n; ++i) {
-	          next.push(children[i]);
-	        }
-	      }
-	    } while (next.length);
-	    return this;
-	  }
-	
-	  function node_eachBefore(callback) {
-	    var node = this, nodes = [node], children, i;
-	    while (node = nodes.pop()) {
-	      callback(node), children = node.children;
-	      if (children) for (i = children.length - 1; i >= 0; --i) {
-	        nodes.push(children[i]);
-	      }
-	    }
-	    return this;
-	  }
-	
-	  function node_eachAfter(callback) {
-	    var node = this, nodes = [node], next = [], children, i, n;
-	    while (node = nodes.pop()) {
-	      next.push(node), children = node.children;
-	      if (children) for (i = 0, n = children.length; i < n; ++i) {
-	        nodes.push(children[i]);
-	      }
-	    }
-	    while (node = next.pop()) {
-	      callback(node);
-	    }
-	    return this;
-	  }
-	
-	  function node_sum(value) {
-	    return this.eachAfter(function(node) {
-	      var sum = +value(node.data) || 0,
-	          children = node.children,
-	          i = children && children.length;
-	      while (--i >= 0) sum += children[i].value;
-	      node.value = sum;
-	    });
-	  }
-	
-	  function node_sort(compare) {
-	    return this.eachBefore(function(node) {
-	      if (node.children) {
-	        node.children.sort(compare);
-	      }
-	    });
-	  }
-	
-	  function node_path(end) {
-	    var start = this,
-	        ancestor = leastCommonAncestor(start, end),
-	        nodes = [start];
-	    while (start !== ancestor) {
-	      start = start.parent;
-	      nodes.push(start);
-	    }
-	    var k = nodes.length;
-	    while (end !== ancestor) {
-	      nodes.splice(k, 0, end);
-	      end = end.parent;
-	    }
-	    return nodes;
-	  }
-	
-	  function leastCommonAncestor(a, b) {
-	    if (a === b) return a;
-	    var aNodes = a.ancestors(),
-	        bNodes = b.ancestors(),
-	        c = null;
-	    a = aNodes.pop();
-	    b = bNodes.pop();
-	    while (a === b) {
-	      c = a;
-	      a = aNodes.pop();
-	      b = bNodes.pop();
-	    }
-	    return c;
-	  }
-	
-	  function node_ancestors() {
-	    var node = this, nodes = [node];
-	    while (node = node.parent) {
-	      nodes.push(node);
-	    }
-	    return nodes;
-	  }
-	
-	  function node_descendants() {
-	    var nodes = [];
-	    this.each(function(node) {
-	      nodes.push(node);
-	    });
-	    return nodes;
-	  }
-	
-	  function node_leaves() {
-	    var leaves = [];
-	    this.eachBefore(function(node) {
-	      if (!node.children) {
-	        leaves.push(node);
-	      }
-	    });
-	    return leaves;
-	  }
-	
-	  function hierarchy(data, children) {
-	    var root = new Node(data),
-	        valued = +data.value && (root.value = data.value),
-	        node,
-	        nodes = [root],
-	        child,
-	        childs,
-	        i,
-	        n;
-	
-	    if (children == null) children = defaultChildren;
-	
-	    while (node = nodes.pop()) {
-	      if (valued) node.value = +node.data.value;
-	      if ((childs = children(node.data)) && (n = childs.length)) {
-	        node.children = new Array(n);
-	        for (i = n - 1; i >= 0; --i) {
-	          nodes.push(child = node.children[i] = new Node(childs[i]));
-	          child.parent = node;
-	          child.depth = node.depth + 1;
-	        }
-	      }
-	    }
-	
-	    return root.eachBefore(computeHeight);
-	  }
-	
-	  function node_copy() {
-	    return hierarchy(this).eachBefore(copyData);
-	  }
-	
-	  function defaultChildren(d) {
-	    return d.children;
-	  }
-	
-	  function copyData(node) {
-	    node.data = node.data.data;
-	  }
-	
-	  function computeHeight(node) {
-	    var height = 0;
-	    do node.height = height;
-	    while ((node = node.parent) && (node.height < ++height));
-	  }
-	
-	  function Node(data) {
-	    this.data = data;
-	    this.depth =
-	    this.height = 0;
-	    this.parent = null;
-	  }
-	
-	  Node.prototype = hierarchy.prototype = {
-	    constructor: Node,
-	    each: node_each,
-	    eachAfter: node_eachAfter,
-	    eachBefore: node_eachBefore,
-	    sum: node_sum,
-	    sort: node_sort,
-	    path: node_path,
-	    ancestors: node_ancestors,
-	    descendants: node_descendants,
-	    leaves: node_leaves,
-	    copy: node_copy
-	  };
-	
-	  function Node$1(value) {
-	    this._ = value;
-	    this.next = null;
-	  }
-	
-	  function shuffle(array) {
-	    var i,
-	        n = (array = array.slice()).length,
-	        head = null,
-	        node = head;
-	
-	    while (n) {
-	      var next = new Node$1(array[n - 1]);
-	      if (node) node = node.next = next;
-	      else node = head = next;
-	      array[i] = array[--n];
-	    }
-	
-	    return {
-	      head: head,
-	      tail: node
-	    };
-	  }
-	
-	  function enclose(circles) {
-	    return encloseN(shuffle(circles), []);
-	  }
-	
-	  function encloses(a, b) {
-	    var dx = b.x - a.x,
-	        dy = b.y - a.y,
-	        dr = a.r - b.r;
-	    return dr * dr + 1e-6 > dx * dx + dy * dy;
-	  }
-	
-	  // Returns the smallest circle that contains circles L and intersects circles B.
-	  function encloseN(L, B) {
-	    var circle,
-	        l0 = null,
-	        l1 = L.head,
-	        l2,
-	        p1;
-	
-	    switch (B.length) {
-	      case 1: circle = enclose1(B[0]); break;
-	      case 2: circle = enclose2(B[0], B[1]); break;
-	      case 3: circle = enclose3(B[0], B[1], B[2]); break;
-	    }
-	
-	    while (l1) {
-	      p1 = l1._, l2 = l1.next;
-	      if (!circle || !encloses(circle, p1)) {
-	
-	        // Temporarily truncate L before l1.
-	        if (l0) L.tail = l0, l0.next = null;
-	        else L.head = L.tail = null;
-	
-	        B.push(p1);
-	        circle = encloseN(L, B); // Note: reorders L!
-	        B.pop();
-	
-	        // Move l1 to the front of L and reconnect the truncated list L.
-	        if (L.head) l1.next = L.head, L.head = l1;
-	        else l1.next = null, L.head = L.tail = l1;
-	        l0 = L.tail, l0.next = l2;
-	
-	      } else {
-	        l0 = l1;
-	      }
-	      l1 = l2;
-	    }
-	
-	    L.tail = l0;
-	    return circle;
-	  }
-	
-	  function enclose1(a) {
-	    return {
-	      x: a.x,
-	      y: a.y,
-	      r: a.r
-	    };
-	  }
-	
-	  function enclose2(a, b) {
-	    var x1 = a.x, y1 = a.y, r1 = a.r,
-	        x2 = b.x, y2 = b.y, r2 = b.r,
-	        x21 = x2 - x1, y21 = y2 - y1, r21 = r2 - r1,
-	        l = Math.sqrt(x21 * x21 + y21 * y21);
-	    return {
-	      x: (x1 + x2 + x21 / l * r21) / 2,
-	      y: (y1 + y2 + y21 / l * r21) / 2,
-	      r: (l + r1 + r2) / 2
-	    };
-	  }
-	
-	  function enclose3(a, b, c) {
-	    var x1 = a.x, y1 = a.y, r1 = a.r,
-	        x2 = b.x, y2 = b.y, r2 = b.r,
-	        x3 = c.x, y3 = c.y, r3 = c.r,
-	        a2 = 2 * (x1 - x2),
-	        b2 = 2 * (y1 - y2),
-	        c2 = 2 * (r2 - r1),
-	        d2 = x1 * x1 + y1 * y1 - r1 * r1 - x2 * x2 - y2 * y2 + r2 * r2,
-	        a3 = 2 * (x1 - x3),
-	        b3 = 2 * (y1 - y3),
-	        c3 = 2 * (r3 - r1),
-	        d3 = x1 * x1 + y1 * y1 - r1 * r1 - x3 * x3 - y3 * y3 + r3 * r3,
-	        ab = a3 * b2 - a2 * b3,
-	        xa = (b2 * d3 - b3 * d2) / ab - x1,
-	        xb = (b3 * c2 - b2 * c3) / ab,
-	        ya = (a3 * d2 - a2 * d3) / ab - y1,
-	        yb = (a2 * c3 - a3 * c2) / ab,
-	        A = xb * xb + yb * yb - 1,
-	        B = 2 * (xa * xb + ya * yb + r1),
-	        C = xa * xa + ya * ya - r1 * r1,
-	        r = (-B - Math.sqrt(B * B - 4 * A * C)) / (2 * A);
-	    return {
-	      x: xa + xb * r + x1,
-	      y: ya + yb * r + y1,
-	      r: r
-	    };
-	  }
-	
-	  function place(a, b, c) {
-	    var ax = a.x,
-	        ay = a.y,
-	        da = b.r + c.r,
-	        db = a.r + c.r,
-	        dx = b.x - ax,
-	        dy = b.y - ay,
-	        dc = dx * dx + dy * dy;
-	    if (dc) {
-	      var x = 0.5 + ((db *= db) - (da *= da)) / (2 * dc),
-	          y = Math.sqrt(Math.max(0, 2 * da * (db + dc) - (db -= dc) * db - da * da)) / (2 * dc);
-	      c.x = ax + x * dx + y * dy;
-	      c.y = ay + x * dy - y * dx;
-	    } else {
-	      c.x = ax + db;
-	      c.y = ay;
-	    }
-	  }
-	
-	  function intersects(a, b) {
-	    var dx = b.x - a.x,
-	        dy = b.y - a.y,
-	        dr = a.r + b.r;
-	    return dr * dr > dx * dx + dy * dy;
-	  }
-	
-	  function distance2(circle, x, y) {
-	    var dx = circle.x - x,
-	        dy = circle.y - y;
-	    return dx * dx + dy * dy;
-	  }
-	
-	  function Node$2(circle) {
-	    this._ = circle;
-	    this.next = null;
-	    this.previous = null;
-	  }
-	
-	  function packSiblings(circles) {
-	    if (!(n = circles.length)) return circles;
-	
-	    var a, b, c, n;
-	
-	    // Place the first circle.
-	    a = circles[0], a.x = a.r, a.y = 0;
-	    if (!(n > 1)) return circles;
-	
-	    // Place the second circle.
-	    b = circles[1], b.x = -b.r, b.y = 0;
-	    if (!(n > 2)) return circles;
-	
-	    // Place the third circle.
-	    place(b, a, c = circles[2]);
-	
-	    // Initialize the weighted centroid.
-	    var aa = a.r * a.r,
-	        ba = b.r * b.r,
-	        ca = c.r * c.r,
-	        oa = aa + ba + ca,
-	        ox = aa * a.x + ba * b.x + ca * c.x,
-	        oy = aa * a.y + ba * b.y + ca * c.y,
-	        cx, cy, i, j, k, sj, sk;
-	
-	    // Initialize the front-chain using the first three circles a, b and c.
-	    a = new Node$2(a), b = new Node$2(b), c = new Node$2(c);
-	    a.next = c.previous = b;
-	    b.next = a.previous = c;
-	    c.next = b.previous = a;
-	
-	    // Attempt to place each remaining circle…
-	    pack: for (i = 3; i < n; ++i) {
-	      place(a._, b._, c = circles[i]), c = new Node$2(c);
-	
-	      // If there are only three elements in the front-chain…
-	      if ((k = a.previous) === (j = b.next)) {
-	        // If the new circle intersects the third circle,
-	        // rotate the front chain to try the next position.
-	        if (intersects(j._, c._)) {
-	          a = b, b = j, --i;
-	          continue pack;
-	        }
-	      }
-	
-	      // Find the closest intersecting circle on the front-chain, if any.
-	      else {
-	        sj = j._.r, sk = k._.r;
-	        do {
-	          if (sj <= sk) {
-	            if (intersects(j._, c._)) {
-	              b = j, a.next = b, b.previous = a, --i;
-	              continue pack;
-	            }
-	            j = j.next, sj += j._.r;
-	          } else {
-	            if (intersects(k._, c._)) {
-	              a = k, a.next = b, b.previous = a, --i;
-	              continue pack;
-	            }
-	            k = k.previous, sk += k._.r;
-	          }
-	        } while (j !== k.next);
-	      }
-	
-	      // Success! Insert the new circle c between a and b.
-	      c.previous = a, c.next = b, a.next = b.previous = b = c;
-	
-	      // Update the weighted centroid.
-	      oa += ca = c._.r * c._.r;
-	      ox += ca * c._.x;
-	      oy += ca * c._.y;
-	
-	      // Compute the new closest circle a to centroid.
-	      aa = distance2(a._, cx = ox / oa, cy = oy / oa);
-	      while ((c = c.next) !== b) {
-	        if ((ca = distance2(c._, cx, cy)) < aa) {
-	          a = c, aa = ca;
-	        }
-	      }
-	      b = a.next;
-	    }
-	
-	    return circles;
-	  }
-	
-	  function optional(f) {
-	    return f == null ? null : required(f);
-	  }
-	
-	  function required(f) {
-	    if (typeof f !== "function") throw new Error;
-	    return f;
-	  }
-	
-	  function constantZero() {
-	    return 0;
-	  }
-	
-	  function constant(x) {
-	    return function() {
-	      return x;
-	    };
-	  }
-	
-	  function defaultRadius(d) {
-	    return Math.sqrt(d.value);
-	  }
-	
-	  function index() {
-	    var radius = null,
-	        dx = 1,
-	        dy = 1,
-	        padding = constantZero;
-	
-	    function pack(root) {
-	      root.x = dx / 2, root.y = dy / 2;
-	      if (radius) {
-	        root.eachBefore(radiusLeaf(radius))
-	            .eachAfter(packChildren(padding, 0.5))
-	            .eachBefore(translateChild(1));
-	      } else {
-	        root.eachBefore(radiusLeaf(defaultRadius))
-	            .eachAfter(packChildren(constantZero, 1))
-	            .eachAfter(packChildren(padding, root.r / Math.min(dx, dy)))
-	            .eachBefore(translateChild(Math.min(dx, dy) / (2 * root.r)));
-	      }
-	      return root;
-	    }
-	
-	    pack.radius = function(x) {
-	      return arguments.length ? (radius = optional(x), pack) : radius;
-	    };
-	
-	    pack.size = function(x) {
-	      return arguments.length ? (dx = +x[0], dy = +x[1], pack) : [dx, dy];
-	    };
-	
-	    pack.padding = function(x) {
-	      return arguments.length ? (padding = typeof x === "function" ? x : constant(+x), pack) : padding;
-	    };
-	
-	    return pack;
-	  }
-	
-	  function radiusLeaf(radius) {
-	    return function(node) {
-	      if (!node.children) {
-	        node.r = Math.max(0, +radius(node) || 0);
-	      }
-	    };
-	  }
-	
-	  function packChildren(padding, k) {
-	    return function(node) {
-	      if (children = node.children) {
-	        var circle,
-	            children,
-	            child,
-	            i,
-	            n = children.length,
-	            r = padding(node) * k || 0;
-	
-	        if (r) for (i = 0; i < n; ++i) {
-	          children[i].r += r;
-	        }
-	
-	        for (i = 0, circle = enclose(packSiblings(children)); i < n; ++i) {
-	          child = children[i], child.x -= circle.x, child.y -= circle.y;
-	        }
-	
-	        if (r) for (i = 0; i < n; ++i) {
-	          children[i].r -= r;
-	        }
-	
-	        node.r = circle.r + r;
-	      }
-	    };
-	  }
-	
-	  function translateChild(k) {
-	    return function(node) {
-	      var parent = node.parent;
-	      node.r *= k;
-	      if (parent) {
-	        node.x = parent.x + k * node.x;
-	        node.y = parent.y + k * node.y;
-	      }
-	    };
-	  }
-	
-	  function roundNode(node) {
-	    node.x0 = Math.round(node.x0);
-	    node.y0 = Math.round(node.y0);
-	    node.x1 = Math.round(node.x1);
-	    node.y1 = Math.round(node.y1);
-	  }
-	
-	  function dice(parent, x0, y0, x1, y1) {
-	    var nodes = parent.children,
-	        node,
-	        i = -1,
-	        n = nodes.length,
-	        k = (x1 - x0) / parent.value;
-	
-	    while (++i < n) {
-	      node = nodes[i], node.y0 = y0, node.y1 = y1;
-	      node.x0 = x0, node.x1 = x0 += node.value * k;
-	    }
-	  }
-	
-	  function partition() {
-	    var dx = 1,
-	        dy = 1,
-	        padding = 0,
-	        round = false;
-	
-	    function partition(root) {
-	      var n = root.height + 1;
-	      root.x0 =
-	      root.y0 = padding;
-	      root.x1 = dx;
-	      root.y1 = dy / n;
-	      root.eachBefore(positionNode(dy, n));
-	      if (round) root.eachBefore(roundNode);
-	      return root;
-	    }
-	
-	    function positionNode(dy, n) {
-	      return function(node) {
-	        if (node.children) {
-	          dice(node, node.x0, dy * (node.depth + 1) / n, node.x1, dy * (node.depth + 2) / n);
-	        }
-	        var x0 = node.x0,
-	            y0 = node.y0,
-	            x1 = node.x1 - padding,
-	            y1 = node.y1 - padding;
-	        if (x1 < x0) x0 = x1 = (x0 + x1) / 2;
-	        if (y1 < y0) y0 = y1 = (y0 + y1) / 2;
-	        node.x0 = x0;
-	        node.y0 = y0;
-	        node.x1 = x1;
-	        node.y1 = y1;
-	      };
-	    }
-	
-	    partition.round = function(x) {
-	      return arguments.length ? (round = !!x, partition) : round;
-	    };
-	
-	    partition.size = function(x) {
-	      return arguments.length ? (dx = +x[0], dy = +x[1], partition) : [dx, dy];
-	    };
-	
-	    partition.padding = function(x) {
-	      return arguments.length ? (padding = +x, partition) : padding;
-	    };
-	
-	    return partition;
-	  }
-	
-	  var keyPrefix = "$";
-	  var preroot = {depth: -1};
-	  var ambiguous = {};
-	  function defaultId(d) {
-	    return d.id;
-	  }
-	
-	  function defaultParentId(d) {
-	    return d.parentId;
-	  }
-	
-	  function stratify() {
-	    var id = defaultId,
-	        parentId = defaultParentId;
-	
-	    function stratify(data) {
-	      var d,
-	          i,
-	          n = data.length,
-	          root,
-	          parent,
-	          node,
-	          nodes = new Array(n),
-	          nodeId,
-	          nodeKey,
-	          nodeByKey = {};
-	
-	      for (i = 0; i < n; ++i) {
-	        d = data[i], node = nodes[i] = new Node(d);
-	        if ((nodeId = id(d, i, data)) != null && (nodeId += "")) {
-	          nodeKey = keyPrefix + (node.id = nodeId);
-	          nodeByKey[nodeKey] = nodeKey in nodeByKey ? ambiguous : node;
-	        }
-	      }
-	
-	      for (i = 0; i < n; ++i) {
-	        node = nodes[i], nodeId = parentId(data[i], i, data);
-	        if (nodeId == null || !(nodeId += "")) {
-	          if (root) throw new Error("multiple roots");
-	          root = node;
-	        } else {
-	          parent = nodeByKey[keyPrefix + nodeId];
-	          if (!parent) throw new Error("missing: " + nodeId);
-	          if (parent === ambiguous) throw new Error("ambiguous: " + nodeId);
-	          if (parent.children) parent.children.push(node);
-	          else parent.children = [node];
-	          node.parent = parent;
-	        }
-	      }
-	
-	      if (!root) throw new Error("no root");
-	      root.parent = preroot;
-	      root.eachBefore(function(node) { node.depth = node.parent.depth + 1; --n; }).eachBefore(computeHeight);
-	      root.parent = null;
-	      if (n > 0) throw new Error("cycle");
-	
-	      return root;
-	    }
-	
-	    stratify.id = function(x) {
-	      return arguments.length ? (id = required(x), stratify) : id;
-	    };
-	
-	    stratify.parentId = function(x) {
-	      return arguments.length ? (parentId = required(x), stratify) : parentId;
-	    };
-	
-	    return stratify;
-	  }
-	
-	  function defaultSeparation$1(a, b) {
-	    return a.parent === b.parent ? 1 : 2;
-	  }
-	
-	  // function radialSeparation(a, b) {
-	  //   return (a.parent === b.parent ? 1 : 2) / a.depth;
-	  // }
-	
-	  // This function is used to traverse the left contour of a subtree (or
-	  // subforest). It returns the successor of v on this contour. This successor is
-	  // either given by the leftmost child of v or by the thread of v. The function
-	  // returns null if and only if v is on the highest level of its subtree.
-	  function nextLeft(v) {
-	    var children = v.children;
-	    return children ? children[0] : v.t;
-	  }
-	
-	  // This function works analogously to nextLeft.
-	  function nextRight(v) {
-	    var children = v.children;
-	    return children ? children[children.length - 1] : v.t;
-	  }
-	
-	  // Shifts the current subtree rooted at w+. This is done by increasing
-	  // prelim(w+) and mod(w+) by shift.
-	  function moveSubtree(wm, wp, shift) {
-	    var change = shift / (wp.i - wm.i);
-	    wp.c -= change;
-	    wp.s += shift;
-	    wm.c += change;
-	    wp.z += shift;
-	    wp.m += shift;
-	  }
-	
-	  // All other shifts, applied to the smaller subtrees between w- and w+, are
-	  // performed by this function. To prepare the shifts, we have to adjust
-	  // change(w+), shift(w+), and change(w-).
-	  function executeShifts(v) {
-	    var shift = 0,
-	        change = 0,
-	        children = v.children,
-	        i = children.length,
-	        w;
-	    while (--i >= 0) {
-	      w = children[i];
-	      w.z += shift;
-	      w.m += shift;
-	      shift += w.s + (change += w.c);
-	    }
-	  }
-	
-	  // If vi-’s ancestor is a sibling of v, returns vi-’s ancestor. Otherwise,
-	  // returns the specified (default) ancestor.
-	  function nextAncestor(vim, v, ancestor) {
-	    return vim.a.parent === v.parent ? vim.a : ancestor;
-	  }
-	
-	  function TreeNode(node, i) {
-	    this._ = node;
-	    this.parent = null;
-	    this.children = null;
-	    this.A = null; // default ancestor
-	    this.a = this; // ancestor
-	    this.z = 0; // prelim
-	    this.m = 0; // mod
-	    this.c = 0; // change
-	    this.s = 0; // shift
-	    this.t = null; // thread
-	    this.i = i; // number
-	  }
-	
-	  TreeNode.prototype = Object.create(Node.prototype);
-	
-	  function treeRoot(root) {
-	    var tree = new TreeNode(root, 0),
-	        node,
-	        nodes = [tree],
-	        child,
-	        children,
-	        i,
-	        n;
-	
-	    while (node = nodes.pop()) {
-	      if (children = node._.children) {
-	        node.children = new Array(n = children.length);
-	        for (i = n - 1; i >= 0; --i) {
-	          nodes.push(child = node.children[i] = new TreeNode(children[i], i));
-	          child.parent = node;
-	        }
-	      }
-	    }
-	
-	    (tree.parent = new TreeNode(null, 0)).children = [tree];
-	    return tree;
-	  }
-	
-	  // Node-link tree diagram using the Reingold-Tilford "tidy" algorithm
-	  function tree() {
-	    var separation = defaultSeparation$1,
-	        dx = 1,
-	        dy = 1,
-	        nodeSize = null;
-	
-	    function tree(root) {
-	      var t = treeRoot(root);
-	
-	      // Compute the layout using Buchheim et al.’s algorithm.
-	      t.eachAfter(firstWalk), t.parent.m = -t.z;
-	      t.eachBefore(secondWalk);
-	
-	      // If a fixed node size is specified, scale x and y.
-	      if (nodeSize) root.eachBefore(sizeNode);
-	
-	      // If a fixed tree size is specified, scale x and y based on the extent.
-	      // Compute the left-most, right-most, and depth-most nodes for extents.
-	      else {
-	        var left = root,
-	            right = root,
-	            bottom = root;
-	        root.eachBefore(function(node) {
-	          if (node.x < left.x) left = node;
-	          if (node.x > right.x) right = node;
-	          if (node.depth > bottom.depth) bottom = node;
-	        });
-	        var s = left === right ? 1 : separation(left, right) / 2,
-	            tx = s - left.x,
-	            kx = dx / (right.x + s + tx),
-	            ky = dy / (bottom.depth || 1);
-	        root.eachBefore(function(node) {
-	          node.x = (node.x + tx) * kx;
-	          node.y = node.depth * ky;
-	        });
-	      }
-	
-	      return root;
-	    }
-	
-	    // Computes a preliminary x-coordinate for v. Before that, FIRST WALK is
-	    // applied recursively to the children of v, as well as the function
-	    // APPORTION. After spacing out the children by calling EXECUTE SHIFTS, the
-	    // node v is placed to the midpoint of its outermost children.
-	    function firstWalk(v) {
-	      var children = v.children,
-	          siblings = v.parent.children,
-	          w = v.i ? siblings[v.i - 1] : null;
-	      if (children) {
-	        executeShifts(v);
-	        var midpoint = (children[0].z + children[children.length - 1].z) / 2;
-	        if (w) {
-	          v.z = w.z + separation(v._, w._);
-	          v.m = v.z - midpoint;
-	        } else {
-	          v.z = midpoint;
-	        }
-	      } else if (w) {
-	        v.z = w.z + separation(v._, w._);
-	      }
-	      v.parent.A = apportion(v, w, v.parent.A || siblings[0]);
-	    }
-	
-	    // Computes all real x-coordinates by summing up the modifiers recursively.
-	    function secondWalk(v) {
-	      v._.x = v.z + v.parent.m;
-	      v.m += v.parent.m;
-	    }
-	
-	    // The core of the algorithm. Here, a new subtree is combined with the
-	    // previous subtrees. Threads are used to traverse the inside and outside
-	    // contours of the left and right subtree up to the highest common level. The
-	    // vertices used for the traversals are vi+, vi-, vo-, and vo+, where the
-	    // superscript o means outside and i means inside, the subscript - means left
-	    // subtree and + means right subtree. For summing up the modifiers along the
-	    // contour, we use respective variables si+, si-, so-, and so+. Whenever two
-	    // nodes of the inside contours conflict, we compute the left one of the
-	    // greatest uncommon ancestors using the function ANCESTOR and call MOVE
-	    // SUBTREE to shift the subtree and prepare the shifts of smaller subtrees.
-	    // Finally, we add a new thread (if necessary).
-	    function apportion(v, w, ancestor) {
-	      if (w) {
-	        var vip = v,
-	            vop = v,
-	            vim = w,
-	            vom = vip.parent.children[0],
-	            sip = vip.m,
-	            sop = vop.m,
-	            sim = vim.m,
-	            som = vom.m,
-	            shift;
-	        while (vim = nextRight(vim), vip = nextLeft(vip), vim && vip) {
-	          vom = nextLeft(vom);
-	          vop = nextRight(vop);
-	          vop.a = v;
-	          shift = vim.z + sim - vip.z - sip + separation(vim._, vip._);
-	          if (shift > 0) {
-	            moveSubtree(nextAncestor(vim, v, ancestor), v, shift);
-	            sip += shift;
-	            sop += shift;
-	          }
-	          sim += vim.m;
-	          sip += vip.m;
-	          som += vom.m;
-	          sop += vop.m;
-	        }
-	        if (vim && !nextRight(vop)) {
-	          vop.t = vim;
-	          vop.m += sim - sop;
-	        }
-	        if (vip && !nextLeft(vom)) {
-	          vom.t = vip;
-	          vom.m += sip - som;
-	          ancestor = v;
-	        }
-	      }
-	      return ancestor;
-	    }
-	
-	    function sizeNode(node) {
-	      node.x *= dx;
-	      node.y = node.depth * dy;
-	    }
-	
-	    tree.separation = function(x) {
-	      return arguments.length ? (separation = x, tree) : separation;
-	    };
-	
-	    tree.size = function(x) {
-	      return arguments.length ? (nodeSize = false, dx = +x[0], dy = +x[1], tree) : (nodeSize ? null : [dx, dy]);
-	    };
-	
-	    tree.nodeSize = function(x) {
-	      return arguments.length ? (nodeSize = true, dx = +x[0], dy = +x[1], tree) : (nodeSize ? [dx, dy] : null);
-	    };
-	
-	    return tree;
-	  }
-	
-	  function slice(parent, x0, y0, x1, y1) {
-	    var nodes = parent.children,
-	        node,
-	        i = -1,
-	        n = nodes.length,
-	        k = (y1 - y0) / parent.value;
-	
-	    while (++i < n) {
-	      node = nodes[i], node.x0 = x0, node.x1 = x1;
-	      node.y0 = y0, node.y1 = y0 += node.value * k;
-	    }
-	  }
-	
-	  var squarify = (function custom(ratio) {
-	
-	    function squarify(parent, x0, y0, x1, y1) {
-	      if (parent._squarify) return resquarify(parent, x0, y0, x1, y1);
-	
-	      var squarified = parent._squarify = [],
-	          nodes = parent.children,
-	          row,
-	          nodeValue,
-	          i0 = 0,
-	          i1,
-	          n = nodes.length,
-	          dx, dy,
-	          value = parent.value,
-	          sumValue,
-	          minValue,
-	          maxValue,
-	          newRatio,
-	          minRatio,
-	          alpha,
-	          beta;
-	
-	      while (i0 < n) {
-	        dx = x1 - x0, dy = y1 - y0;
-	        minValue = maxValue = sumValue = nodes[i0].value;
-	        alpha = Math.max(dy / dx, dx / dy) / (value * ratio);
-	        beta = sumValue * sumValue * alpha;
-	        minRatio = Math.max(maxValue / beta, beta / minValue);
-	
-	        // Keep adding nodes while the aspect ratio maintains or improves.
-	        for (i1 = i0 + 1; i1 < n; ++i1) {
-	          sumValue += nodeValue = nodes[i1].value;
-	          if (nodeValue < minValue) minValue = nodeValue;
-	          if (nodeValue > maxValue) maxValue = nodeValue;
-	          beta = sumValue * sumValue * alpha;
-	          newRatio = Math.max(maxValue / beta, beta / minValue);
-	          if (newRatio > minRatio) { sumValue -= nodeValue; break; }
-	          minRatio = newRatio;
-	        }
-	
-	        // Position and record the row orientation.
-	        squarified.push(row = {value: sumValue, dice: dx < dy, children: nodes.slice(i0, i1)});
-	        if (row.dice) dice(row, x0, y0, x1, y0 += dy * sumValue / value);
-	        else slice(row, x0, y0, x0 += dx * sumValue / value, y1);
-	        value -= sumValue, i0 = i1;
-	      }
-	    }
-	
-	    squarify.ratio = function(x) {
-	      return custom((x = +x) > 1 ? x : 1);
-	    };
-	
-	    return squarify;
-	  })((1 + Math.sqrt(5)) / 2, false);
-	
-	  function resquarify(parent, x0, y0, x1, y1) {
-	    var squarified = parent._squarify,
-	        row,
-	        nodes,
-	        i,
-	        j = -1,
-	        n,
-	        m = squarified.length,
-	        value = parent.value;
-	
-	    while (++j < m) {
-	      row = squarified[j], nodes = row.children;
-	      for (i = row.value = 0, n = nodes.length; i < n; ++i) row.value += nodes[i].value;
-	      if (row.dice) dice(row, x0, y0, x1, y0 += (y1 - y0) * row.value / value);
-	      else slice(row, x0, y0, x0 += (x1 - x0) * row.value / value, y1);
-	      value -= row.value;
-	    }
-	  }
-	
-	  function index$1() {
-	    var tile = squarify,
-	        round = false,
-	        dx = 1,
-	        dy = 1,
-	        paddingStack = [0],
-	        paddingInner = constantZero,
-	        paddingTop = constantZero,
-	        paddingRight = constantZero,
-	        paddingBottom = constantZero,
-	        paddingLeft = constantZero;
-	
-	    function treemap(root) {
-	      root.x0 =
-	      root.y0 = 0;
-	      root.x1 = dx;
-	      root.y1 = dy;
-	      root.eachBefore(positionNode);
-	      paddingStack = [0];
-	      if (round) root.eachBefore(roundNode);
-	      return root;
-	    }
-	
-	    function positionNode(node) {
-	      var p = paddingStack[node.depth],
-	          x0 = node.x0 + p,
-	          y0 = node.y0 + p,
-	          x1 = node.x1 - p,
-	          y1 = node.y1 - p;
-	      if (x1 < x0) x0 = x1 = (x0 + x1) / 2;
-	      if (y1 < y0) y0 = y1 = (y0 + y1) / 2;
-	      node.x0 = x0;
-	      node.y0 = y0;
-	      node.x1 = x1;
-	      node.y1 = y1;
-	      if (node.children) {
-	        p = paddingStack[node.depth + 1] = paddingInner(node) / 2;
-	        x0 += paddingLeft(node) - p;
-	        y0 += paddingTop(node) - p;
-	        x1 -= paddingRight(node) - p;
-	        y1 -= paddingBottom(node) - p;
-	        if (x1 < x0) x0 = x1 = (x0 + x1) / 2;
-	        if (y1 < y0) y0 = y1 = (y0 + y1) / 2;
-	        tile(node, x0, y0, x1, y1);
-	      }
-	    }
-	
-	    treemap.round = function(x) {
-	      return arguments.length ? (round = !!x, treemap) : round;
-	    };
-	
-	    treemap.size = function(x) {
-	      return arguments.length ? (dx = +x[0], dy = +x[1], treemap) : [dx, dy];
-	    };
-	
-	    treemap.tile = function(x) {
-	      return arguments.length ? (tile = required(x), treemap) : tile;
-	    };
-	
-	    treemap.padding = function(x) {
-	      return arguments.length ? treemap.paddingInner(x).paddingOuter(x) : treemap.paddingInner();
-	    };
-	
-	    treemap.paddingInner = function(x) {
-	      return arguments.length ? (paddingInner = typeof x === "function" ? x : constant(+x), treemap) : paddingInner;
-	    };
-	
-	    treemap.paddingOuter = function(x) {
-	      return arguments.length ? treemap.paddingTop(x).paddingRight(x).paddingBottom(x).paddingLeft(x) : treemap.paddingTop();
-	    };
-	
-	    treemap.paddingTop = function(x) {
-	      return arguments.length ? (paddingTop = typeof x === "function" ? x : constant(+x), treemap) : paddingTop;
-	    };
-	
-	    treemap.paddingRight = function(x) {
-	      return arguments.length ? (paddingRight = typeof x === "function" ? x : constant(+x), treemap) : paddingRight;
-	    };
-	
-	    treemap.paddingBottom = function(x) {
-	      return arguments.length ? (paddingBottom = typeof x === "function" ? x : constant(+x), treemap) : paddingBottom;
-	    };
-	
-	    treemap.paddingLeft = function(x) {
-	      return arguments.length ? (paddingLeft = typeof x === "function" ? x : constant(+x), treemap) : paddingLeft;
-	    };
-	
-	    return treemap;
-	  }
-	
-	  function binary(parent, x0, y0, x1, y1) {
-	    var nodes = parent.children;
-	    partition$1(nodes, 0, nodes.length, parent.value, x0, y0, x1, y1);
-	  }
-	
-	  function partition$1(nodes, i, j, value, x0, y0, x1, y1) {
-	    if (i >= j - 1) {
-	      nodes = nodes[i];
-	      nodes.x0 = x0, nodes.y0 = y0;
-	      nodes.x1 = x1, nodes.y1 = y1;
-	      return;
-	    }
-	
-	    var k = i, valueHalf = value / 2, valueLeft = 0;
-	    do valueLeft += nodes[k].value; while (++k < j - 1 && valueLeft < valueHalf);
-	    var valueRight = value - valueLeft;
-	
-	    if ((y1 - y0) > (x1 - x0)) {
-	      var yk = (y0 * valueRight + y1 * valueLeft) / value;
-	      partition$1(nodes, i, k, valueLeft, x0, y0, x1, yk);
-	      partition$1(nodes, k, j, valueRight, x0, yk, x1, y1);
-	    } else {
-	      var xk = (x0 * valueRight + x1 * valueLeft) / value;
-	      partition$1(nodes, i, k, valueLeft, x0, y0, xk, y1);
-	      partition$1(nodes, k, j, valueRight, xk, y0, x1, y1);
-	    }
-	  }
-	
-	  function sliceDice(parent, x0, y0, x1, y1) {
-	    (parent.depth & 1 ? slice : dice)(parent, x0, y0, x1, y1);
-	  }
-	
-	  exports.version = version;
-	  exports.cluster = cluster;
-	  exports.hierarchy = hierarchy;
-	  exports.pack = index;
-	  exports.packSiblings = packSiblings;
-	  exports.packEnclose = enclose;
-	  exports.partition = partition;
-	  exports.stratify = stratify;
-	  exports.tree = tree;
-	  exports.treemap = index$1;
-	  exports.treemapBinary = binary;
-	  exports.treemapDice = dice;
-	  exports.treemapSlice = slice;
-	  exports.treemapSliceDice = sliceDice;
-	  exports.treemapSquarify = squarify;
-	
-	}));
-
-/***/ },
-/* 12 */
-/***/ function(module, exports, __webpack_require__) {
-
 	"use strict";
 	
 	Object.defineProperty(exports, "__esModule", {
@@ -30554,144 +29138,153 @@
 	
 	// var color = d3.scale.category20();
 	
-	var cell_size = 5;
-	var isolevel = 0.0250;
-	var epsilon = 0.00000001;
-	var grid = {
-	  width: 1400 * 2,
-	  height: 800 * 2
-	};
-	
-	var set = []; //the current set for the bubble
-	
-	var edge_table = [0x0, //0000,
-	0x9, //1001,
-	0x3, //0011
-	0xa, //1010
-	0x6, //0110,
-	0xf, //1111,
-	0x5, //0101
-	0xc, //1100
-	0xc, //1100
-	0x5, //0101
-	0xf, //1111,
-	0x6, //0110,
-	0xa, //1010
-	0x3, //0011
-	0x9, //1001,
-	0x0 //0000
-	];
-	
-	var segment_table = [[-1, -1, -1, -1, -1], [0, 3, -1, -1, -1], [1, 0, -1, -1, -1], [1, 3, -1, -1, -1], [2, 1, -1, -1, -1], [2, 1, 0, 3, -1], [2, 0, -1, -1, -1], [2, 3, -1, -1, -1], [3, 2, -1, -1, -1], [0, 2, -1, -1, -1], [1, 0, 3, 2, -1], [1, 2, -1, -1, -1], [3, 1, -1, -1, -1], [0, 1, -1, -1, -1], [3, 0, -1, -1, -1], [-1, -1, -1, -1, -1]];
-	
-	function vertex_interp(isolevel, p1, p2, valp1, valp2) {
-	  if (Math.abs(isolevel - valp1) < epsilon) {
-	    return p1;
-	  }
-	  if (Math.abs(isolevel - valp2) < epsilon) {
-	    return p2;
-	  }
-	  if (Math.abs(valp1 - valp2) < epsilon) {
-	    return p2;
-	  }
-	  var mu = (isolevel - valp1) / (valp2 - valp1);
-	  var p = {
-	    x: p1.x + mu * (p2.x - p1.x),
-	    y: p1.y + mu * (p2.y - p1.y)
-	  };
-	  return p;
-	}
-	
-	function get_grid_cell(x, y) {
-	  var cell = {
-	    x: x,
-	    y: y,
-	    v: [{ x: x, y: y }, { x: x + cell_size, y: y }, { x: x + cell_size, y: y + cell_size }, { x: x, y: y + cell_size }],
-	    val: [threshold(x, y), threshold(x + cell_size, y), threshold(x + cell_size, y + cell_size), threshold(x, y + cell_size)],
-	    status: false
-	  };
-	
-	  if (cell.val[0] < isolevel || cell.val[1] < isolevel || cell.val[2] < isolevel || cell.val[3] < isolevel) {
-	    cell.status = true;
-	  }
-	
-	  return cell;
-	}
-	
-	function polygonize(cell, isolevel) {
-	  var index = 0;
-	  if (cell.val[0] < isolevel) {
-	    index |= 1;
-	  }
-	  if (cell.val[1] < isolevel) {
-	    index |= 2;
-	  }
-	  if (cell.val[2] < isolevel) {
-	    index |= 4;
-	  }
-	  if (cell.val[3] < isolevel) {
-	    index |= 8;
-	  }
-	
-	  if (edge_table[index] === 0) {
-	    return []; // no segments here!
-	  }
-	
-	  var vertlist = [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }];
-	
-	  if (edge_table[index] & 1) {
-	    vertlist[0] = vertex_interp(isolevel, cell.v[0], cell.v[1], cell.val[0], cell.val[1]);
-	  }
-	  if (edge_table[index] & 2) {
-	    vertlist[1] = vertex_interp(isolevel, cell.v[1], cell.v[2], cell.val[1], cell.val[2]);
-	  }
-	  if (edge_table[index] & 4) {
-	    vertlist[2] = vertex_interp(isolevel, cell.v[2], cell.v[3], cell.val[2], cell.val[3]);
-	  }
-	  if (edge_table[index] & 8) {
-	    vertlist[3] = vertex_interp(isolevel, cell.v[3], cell.v[0], cell.val[3], cell.val[0]);
-	  }
-	
-	  var segments = [];
-	  for (var i = 0; segment_table[index][i] != -1; i += 2) {
-	    segments.push({ a: vertlist[segment_table[index][i]],
-	      b: vertlist[segment_table[index][i + 1]]
-	    });
-	  }
-	
-	  return segments;
-	}
-	
-	//graph.nodes dependence
-	function threshold(x, y) {
-	  var f = 0;
-	  for (var i = 0; i < set.length; i++) {
-	    var d = Math.sqrt(Math.pow(set[i].x - x, 2) + Math.pow(set[i].y - y, 2));
-	    var g_force = 1 / Math.pow(d, 2);
-	    f += g_force;
-	  }
-	  return f;
-	}
-	
-	var iterationOfMarchingSquares = 0;
-	var selectTetrisCells = null;
-	var bubblePoints = [];
-	var prevArrayOfArraysLength = [];
-	var groupFillOpacity = 0.5;
-	
-	var tetrisIsOn = false;
-	var tetrisOpacityMap = null;
-	
-	var minTestrisOpacity = 0.25,
-	    maxTestrisOpacity = 1;
-	var tetrisOpacityRange = [minTestrisOpacity, maxTestrisOpacity];
+	// var hullcolor = d3.scale.category20();
+	//
+	// var hullcurve = d3.svg.line()
+	//   .interpolate("basis-closed")
+	//   .x(d => d.x)
+	//   .y(d => d.y);
 	
 	function draw_marching_squares(callback, groups) {
+	  var isolevel = arguments.length <= 2 || arguments[2] === undefined ? 0.0250 : arguments[2];
+	  var cell_size = arguments.length <= 3 || arguments[3] === undefined ? 5 : arguments[3];
+	
+	  // var isolevel = 0.0250;
+	  var epsilon = 0.00000001;
+	  var grid = {
+	    width: 1400,
+	    height: 800
+	  };
+	
+	  var set = []; //the current set for the bubble
+	
+	  var edge_table = [0x0, //0000,
+	  0x9, //1001,
+	  0x3, //0011
+	  0xa, //1010
+	  0x6, //0110,
+	  0xf, //1111,
+	  0x5, //0101
+	  0xc, //1100
+	  0xc, //1100
+	  0x5, //0101
+	  0xf, //1111,
+	  0x6, //0110,
+	  0xa, //1010
+	  0x3, //0011
+	  0x9, //1001,
+	  0x0 //0000
+	  ];
+	
+	  var segment_table = [[-1, -1, -1, -1, -1], [0, 3, -1, -1, -1], [1, 0, -1, -1, -1], [1, 3, -1, -1, -1], [2, 1, -1, -1, -1], [2, 1, 0, 3, -1], [2, 0, -1, -1, -1], [2, 3, -1, -1, -1], [3, 2, -1, -1, -1], [0, 2, -1, -1, -1], [1, 0, 3, 2, -1], [1, 2, -1, -1, -1], [3, 1, -1, -1, -1], [0, 1, -1, -1, -1], [3, 0, -1, -1, -1], [-1, -1, -1, -1, -1]];
+	
+	  function vertex_interp(isolevel, p1, p2, valp1, valp2) {
+	    if (Math.abs(isolevel - valp1) < epsilon) {
+	      return p1;
+	    }
+	    if (Math.abs(isolevel - valp2) < epsilon) {
+	      return p2;
+	    }
+	    if (Math.abs(valp1 - valp2) < epsilon) {
+	      return p2;
+	    }
+	    var mu = (isolevel - valp1) / (valp2 - valp1);
+	    var p = {
+	      x: p1.x + mu * (p2.x - p1.x),
+	      y: p1.y + mu * (p2.y - p1.y)
+	    };
+	    return p;
+	  }
+	
+	  function get_grid_cell(x, y) {
+	    var cell = {
+	      x: x,
+	      y: y,
+	      v: [{ x: x, y: y }, { x: x + cell_size, y: y }, { x: x + cell_size, y: y + cell_size }, { x: x, y: y + cell_size }],
+	      val: [threshold(x, y), threshold(x + cell_size, y), threshold(x + cell_size, y + cell_size), threshold(x, y + cell_size)],
+	      status: false
+	    };
+	
+	    if (cell.val[0] < isolevel || cell.val[1] < isolevel || cell.val[2] < isolevel || cell.val[3] < isolevel) {
+	      cell.status = true;
+	    }
+	
+	    return cell;
+	  }
+	
+	  function polygonize(cell, isolevel) {
+	    var index = 0;
+	    if (cell.val[0] < isolevel) {
+	      index |= 1;
+	    }
+	    if (cell.val[1] < isolevel) {
+	      index |= 2;
+	    }
+	    if (cell.val[2] < isolevel) {
+	      index |= 4;
+	    }
+	    if (cell.val[3] < isolevel) {
+	      index |= 8;
+	    }
+	
+	    if (edge_table[index] === 0) {
+	      return []; // no segments here!
+	    }
+	
+	    var vertlist = [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }];
+	
+	    if (edge_table[index] & 1) {
+	      vertlist[0] = vertex_interp(isolevel, cell.v[0], cell.v[1], cell.val[0], cell.val[1]);
+	    }
+	    if (edge_table[index] & 2) {
+	      vertlist[1] = vertex_interp(isolevel, cell.v[1], cell.v[2], cell.val[1], cell.val[2]);
+	    }
+	    if (edge_table[index] & 4) {
+	      vertlist[2] = vertex_interp(isolevel, cell.v[2], cell.v[3], cell.val[2], cell.val[3]);
+	    }
+	    if (edge_table[index] & 8) {
+	      vertlist[3] = vertex_interp(isolevel, cell.v[3], cell.v[0], cell.val[3], cell.val[0]);
+	    }
+	
+	    var segments = [];
+	    for (var i = 0; segment_table[index][i] != -1; i += 2) {
+	      segments.push({ a: vertlist[segment_table[index][i]],
+	        b: vertlist[segment_table[index][i + 1]]
+	      });
+	    }
+	
+	    return segments;
+	  }
+	
+	  //graph.nodes dependence
+	  function threshold(x, y) {
+	    var f = 0;
+	    for (var i = 0; i < set.length; i++) {
+	      var d = Math.sqrt(Math.pow(set[i].x - x, 2) + Math.pow(set[i].y - y, 2));
+	      var g_force = 1 / Math.pow(d, 2);
+	      f += g_force;
+	    }
+	    return f;
+	  }
+	
+	  var iterationOfMarchingSquares = 0;
+	  var selectTetrisCells = null;
+	  var bubblePoints = [];
+	  var prevArrayOfArraysLength = [];
+	  var groupFillOpacity = 0.5;
+	
+	  var tetrisIsOn = false;
+	  var tetrisOpacityMap = null;
+	
+	  var minTestrisOpacity = 0.25,
+	      maxTestrisOpacity = 1;
+	  var tetrisOpacityRange = [minTestrisOpacity, maxTestrisOpacity];
 	  var groupedPoints = [];
 	
 	  groups.forEach(function (g) {
 	
-	    set = g.nodes; //graph.nodes.filter(function(x){return x.group==g;});
+	    set = g.values; //graph.nodes.filter(function(x){return x.group==g;});
+	    // console.log("marching_squares g.set", g.set);
 	
 	    bubblePoints = [];
 	    var tetriscells = [];
@@ -30759,76 +29352,93 @@
 	
 	    g.d = arrayOfArrays;
 	    callback(g);
+	    // d3.select(".bubble-cont").selectAll(".bubble-"+g.key).remove();
+	
+	    // // TODO: no hover possible
+	    // d3.select(".bubble-cont")
+	    //  .selectAll(".bubble-"+g.key)
+	    //   .data(arrayOfArrays)
+	    //   .enter()
+	    //   .append("g")
+	    //   .attr("class", "bubble-"+g.key)
+	    //   .insert("path", ":first-child")
+	    //     .attr("id", (d, i) => "co" + i)
+	    //     .attr("d", function(d){ return hullcurve(d); })
+	    //     .attr("fill", () => hullcolor(g.key))
+	    //      // .attr("stroke", "black")
+	    //      // .attr("stroke-width", "20px")
+	    //     .attr("stroke-linejoin", "round")
+	    //     .attr("opacity", groupFillOpacity);
 	  }); // g
 	
 	  return groupedPoints;
-	}
 	
-	function sortBubblePoints(bubblePoints) {
-	  if (bubblePoints.length === 0) return [];
-	  var subSets = [];
-	  var bubblePointsCopy = bubblePoints;
-	  var sortedBubblePoints = [];
-	  sortedBubblePoints.push(bubblePointsCopy[0]);
-	  bubblePointsCopy = bubblePointsCopy.slice(0, bubblePoints.length);
-	  var id = bubblePointsCopy[0].id;
+	  function sortBubblePoints(bubblePoints) {
+	    if (bubblePoints.length === 0) return [];
+	    var subSets = [];
+	    var bubblePointsCopy = bubblePoints;
+	    var sortedBubblePoints = [];
+	    sortedBubblePoints.push(bubblePointsCopy[0]);
+	    bubblePointsCopy = bubblePointsCopy.slice(0, bubblePoints.length);
+	    var id = bubblePointsCopy[0].id;
 	
-	  for (var i = 0; i < bubblePoints.length - 1; i++) {
+	    for (var i = 0; i < bubblePoints.length - 1; i++) {
 	
-	    var shortestDistance = Infinity,
-	        shortestIndex = null;
-	    for (var j = 0; j < bubblePointsCopy.length; j++) {
-	      //calculate distance
-	      var dist = computeDistance(sortedBubblePoints[i], bubblePointsCopy[j]);
-	      if (dist < shortestDistance) {
-	        shortestIndex = j;
-	        shortestDistance = dist;
+	      var shortestDistance = Infinity,
+	          shortestIndex = null;
+	      for (var j = 0; j < bubblePointsCopy.length; j++) {
+	        //calculate distance
+	        var dist = computeDistance(sortedBubblePoints[i], bubblePointsCopy[j]);
+	        if (dist < shortestDistance) {
+	          shortestIndex = j;
+	          shortestDistance = dist;
+	        }
+	      }
+	      //console.log('sd:'+shortestDistance);
+	      id = bubblePointsCopy[shortestIndex].id;
+	
+	      sortedBubblePoints.push(bubblePointsCopy[shortestIndex]);
+	      bubblePointsCopy.splice(shortestIndex, 1); //remove the element
+	    }
+	
+	    //or just take the evens to approximate the bubble
+	    sortedBubblePoints = sortedBubblePoints.filter(function (x, i) {
+	      return i % 2 === 0;
+	    });
+	
+	    return sortedBubblePoints;
+	  }
+	
+	  function splitSortedBubblePoints(sortedBubblePoints) {
+	    var subSets = [];
+	    var lastSplit = 0;
+	    var thresholdDist = computeDistance({ x: cell_size, y: cell_size }, { x: 0, y: 0 });
+	    for (var i = 0; i < sortedBubblePoints.length - 1; i++) {
+	
+	      if (computeDistance(sortedBubblePoints[i], sortedBubblePoints[i + 1]) > thresholdDist) {
+	        subSets.push(sortedBubblePoints.slice(lastSplit, i));
+	        lastSplit = i + 1;
 	      }
 	    }
-	    //console.log('sd:'+shortestDistance);
-	    id = bubblePointsCopy[shortestIndex].id;
-	
-	    sortedBubblePoints.push(bubblePointsCopy[shortestIndex]);
-	    bubblePointsCopy.splice(shortestIndex, 1); //remove the element
-	  }
-	
-	  //or just take the evens to approximate the bubble
-	  sortedBubblePoints = sortedBubblePoints.filter(function (x, i) {
-	    return i % 2 === 0;
-	  });
-	
-	  return sortedBubblePoints;
-	}
-	
-	function splitSortedBubblePoints(sortedBubblePoints) {
-	  var subSets = [];
-	  var lastSplit = 0;
-	  var thresholdDist = computeDistance({ x: cell_size, y: cell_size }, { x: 0, y: 0 });
-	  for (var i = 0; i < sortedBubblePoints.length - 1; i++) {
-	
-	    if (computeDistance(sortedBubblePoints[i], sortedBubblePoints[i + 1]) > thresholdDist) {
-	      subSets.push(sortedBubblePoints.slice(lastSplit, i));
-	      lastSplit = i + 1;
+	    if (lastSplit != sortedBubblePoints.length) {
+	      subSets.push(sortedBubblePoints.slice(lastSplit, sortedBubblePoints.length));
 	    }
+	    return subSets;
 	  }
-	  if (lastSplit != sortedBubblePoints.length) {
-	    subSets.push(sortedBubblePoints.slice(lastSplit, sortedBubblePoints.length));
+	
+	  function squared(a) {
+	    return Math.pow(a, 2);
 	  }
-	  return subSets;
-	}
 	
-	function squared(a) {
-	  return Math.pow(a, 2);
-	}
-	
-	function computeDistance(a, b) {
-	  return Math.pow(squared(a.x - b.x) + squared(a.y - b.y), 2);
+	  function computeDistance(a, b) {
+	    return Math.pow(squared(a.x - b.x) + squared(a.y - b.y), 2);
+	  }
 	}
 	
 	exports.default = draw_marching_squares;
 
 /***/ },
-/* 13 */
+/* 12 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -30924,16 +29534,817 @@
 	exports.default = offsetInterpolate;
 
 /***/ },
+/* 13 */
+/***/ function(module, exports) {
+
+	'use strict';
+	
+	Object.defineProperty(exports, "__esModule", {
+		value: true
+	});
+	/*
+	 FDEB algorithm implementation [www.win.tue.nl/~dholten/papers/forcebundles_eurovis.pdf].
+	 Author: Corneliu S. (github.com/upphiminn)
+	 2013
+	 */
+	var edgeBundling = function () {
+		return function () {
+			var data_nodes = {},
+			    // {'nodeid':{'x':,'y':},..}
+			data_edges = [],
+			    // [{'source':'nodeid1', 'target':'nodeid2'},..]
+			compatibility_list_for_edge = [],
+			    subdivision_points_for_edge = [],
+			    K = 0.1,
+			    // global bundling constant controlling edge stiffness
+			S_initial = 0.1,
+			    // init. distance to move points
+			P_initial = 1,
+			    // init. subdivision number
+			P_rate = 2,
+			    // subdivision rate increase
+			C = 6,
+			    // number of cycles to perform
+			I_initial = 90,
+			    // init. number of iterations for cycle
+			I_rate = 0.6666667,
+			    // rate at which iteration number decreases i.e. 2/3
+			compatibility_threshold = 0.6,
+			    eps = 1e-6;
+	
+			/*** Geometry Helper Methods ***/
+			function vector_dot_product(p, q) {
+				return p.x * q.x + p.y * q.y;
+			}
+	
+			function edge_as_vector(P) {
+				return {
+					'x': data_nodes[P.target].x - data_nodes[P.source].x,
+					'y': data_nodes[P.target].y - data_nodes[P.source].y
+				};
+			}
+	
+			function edge_length(e) {
+				// handling nodes that are on the same location, so that K/edge_length != Inf
+				if (Math.abs(data_nodes[e.source].x - data_nodes[e.target].x) < eps && Math.abs(data_nodes[e.source].y - data_nodes[e.target].y) < eps) {
+					return eps;
+				}
+	
+				return Math.sqrt(Math.pow(data_nodes[e.source].x - data_nodes[e.target].x, 2) + Math.pow(data_nodes[e.source].y - data_nodes[e.target].y, 2));
+			}
+	
+			function custom_edge_length(e) {
+				return Math.sqrt(Math.pow(e.source.x - e.target.x, 2) + Math.pow(e.source.y - e.target.y, 2));
+			}
+	
+			function edge_midpoint(e) {
+				var middle_x = (data_nodes[e.source].x + data_nodes[e.target].x) / 2.0;
+				var middle_y = (data_nodes[e.source].y + data_nodes[e.target].y) / 2.0;
+	
+				return {
+					'x': middle_x,
+					'y': middle_y
+				};
+			}
+	
+			function compute_divided_edge_length(e_idx) {
+				var length = 0;
+	
+				for (var i = 1; i < subdivision_points_for_edge[e_idx].length; i++) {
+					var segment_length = euclidean_distance(subdivision_points_for_edge[e_idx][i], subdivision_points_for_edge[e_idx][i - 1]);
+					length += segment_length;
+				}
+	
+				return length;
+			}
+	
+			function euclidean_distance(p, q) {
+				return Math.sqrt(Math.pow(p.x - q.x, 2) + Math.pow(p.y - q.y, 2));
+			}
+	
+			function project_point_on_line(p, Q) {
+				var L = Math.sqrt((Q.target.x - Q.source.x) * (Q.target.x - Q.source.x) + (Q.target.y - Q.source.y) * (Q.target.y - Q.source.y));
+				var r = ((Q.source.y - p.y) * (Q.source.y - Q.target.y) - (Q.source.x - p.x) * (Q.target.x - Q.source.x)) / (L * L);
+	
+				return {
+					'x': Q.source.x + r * (Q.target.x - Q.source.x),
+					'y': Q.source.y + r * (Q.target.y - Q.source.y)
+				};
+			}
+	
+			/*** ********************** ***/
+	
+			/*** Initialization Methods ***/
+			function initialize_edge_subdivisions() {
+				for (var i = 0; i < data_edges.length; i++) {
+					if (P_initial === 1) {
+						subdivision_points_for_edge[i] = []; //0 subdivisions
+					} else {
+							subdivision_points_for_edge[i] = [];
+							subdivision_points_for_edge[i].push(data_nodes[data_edges[i].source]);
+							subdivision_points_for_edge[i].push(data_nodes[data_edges[i].target]);
+						}
+				}
+			}
+	
+			function initialize_compatibility_lists() {
+				for (var i = 0; i < data_edges.length; i++) {
+					compatibility_list_for_edge[i] = []; //0 compatible edges.
+				}
+			}
+	
+			function filter_self_loops(edgelist) {
+				var filtered_edge_list = [];
+	
+				for (var e = 0; e < edgelist.length; e++) {
+					if (data_nodes[edgelist[e].source].x != data_nodes[edgelist[e].target].x || data_nodes[edgelist[e].source].y != data_nodes[edgelist[e].target].y) {
+						//or smaller than eps
+						filtered_edge_list.push(edgelist[e]);
+					}
+				}
+	
+				return filtered_edge_list;
+			}
+	
+			/*** ********************** ***/
+	
+			/*** Force Calculation Methods ***/
+			function apply_spring_force(e_idx, i, kP) {
+				var prev = subdivision_points_for_edge[e_idx][i - 1];
+				var next = subdivision_points_for_edge[e_idx][i + 1];
+				var crnt = subdivision_points_for_edge[e_idx][i];
+				var x = prev.x - crnt.x + next.x - crnt.x;
+				var y = prev.y - crnt.y + next.y - crnt.y;
+	
+				x *= kP;
+				y *= kP;
+	
+				return {
+					'x': x,
+					'y': y
+				};
+			}
+	
+			function apply_electrostatic_force(e_idx, i) {
+				var sum_of_forces = {
+					'x': 0,
+					'y': 0
+				};
+				var compatible_edges_list = compatibility_list_for_edge[e_idx];
+	
+				for (var oe = 0; oe < compatible_edges_list.length; oe++) {
+					var force = {
+						'x': subdivision_points_for_edge[compatible_edges_list[oe]][i].x - subdivision_points_for_edge[e_idx][i].x,
+						'y': subdivision_points_for_edge[compatible_edges_list[oe]][i].y - subdivision_points_for_edge[e_idx][i].y
+					};
+	
+					if (Math.abs(force.x) > eps || Math.abs(force.y) > eps) {
+						var diff = 1 / Math.pow(custom_edge_length({
+							'source': subdivision_points_for_edge[compatible_edges_list[oe]][i],
+							'target': subdivision_points_for_edge[e_idx][i]
+						}), 1);
+	
+						sum_of_forces.x += force.x * diff;
+						sum_of_forces.y += force.y * diff;
+					}
+				}
+	
+				return sum_of_forces;
+			}
+	
+			function apply_resulting_forces_on_subdivision_points(e_idx, P, S) {
+				var kP = K / (edge_length(data_edges[e_idx]) * (P + 1)); // kP=K/|P|(number of segments), where |P| is the initial length of edge P.
+				// (length * (num of sub division pts - 1))
+				var resulting_forces_for_subdivision_points = [{
+					'x': 0,
+					'y': 0
+				}];
+	
+				for (var i = 1; i < P + 1; i++) {
+					// exclude initial end points of the edge 0 and P+1
+					var resulting_force = {
+						'x': 0,
+						'y': 0
+					};
+	
+					var spring_force = apply_spring_force(e_idx, i, kP);
+					var electrostatic_force = apply_electrostatic_force(e_idx, i, S);
+	
+					resulting_force.x = S * (spring_force.x + electrostatic_force.x);
+					resulting_force.y = S * (spring_force.y + electrostatic_force.y);
+	
+					resulting_forces_for_subdivision_points.push(resulting_force);
+				}
+	
+				resulting_forces_for_subdivision_points.push({
+					'x': 0,
+					'y': 0
+				});
+	
+				return resulting_forces_for_subdivision_points;
+			}
+	
+			/*** ********************** ***/
+	
+			/*** Edge Division Calculation Methods ***/
+			function update_edge_divisions(P) {
+				for (var e_idx = 0; e_idx < data_edges.length; e_idx++) {
+					if (P === 1) {
+						subdivision_points_for_edge[e_idx].push(data_nodes[data_edges[e_idx].source]); // source
+						subdivision_points_for_edge[e_idx].push(edge_midpoint(data_edges[e_idx])); // mid point
+						subdivision_points_for_edge[e_idx].push(data_nodes[data_edges[e_idx].target]); // target
+					} else {
+							var divided_edge_length = compute_divided_edge_length(e_idx);
+							var segment_length = divided_edge_length / (P + 1);
+							var current_segment_length = segment_length;
+							var new_subdivision_points = [];
+							new_subdivision_points.push(data_nodes[data_edges[e_idx].source]); //source
+	
+							for (var i = 1; i < subdivision_points_for_edge[e_idx].length; i++) {
+								var old_segment_length = euclidean_distance(subdivision_points_for_edge[e_idx][i], subdivision_points_for_edge[e_idx][i - 1]);
+	
+								while (old_segment_length > current_segment_length) {
+									var percent_position = current_segment_length / old_segment_length;
+									var new_subdivision_point_x = subdivision_points_for_edge[e_idx][i - 1].x;
+									var new_subdivision_point_y = subdivision_points_for_edge[e_idx][i - 1].y;
+	
+									new_subdivision_point_x += percent_position * (subdivision_points_for_edge[e_idx][i].x - subdivision_points_for_edge[e_idx][i - 1].x);
+									new_subdivision_point_y += percent_position * (subdivision_points_for_edge[e_idx][i].y - subdivision_points_for_edge[e_idx][i - 1].y);
+									new_subdivision_points.push({
+										'x': new_subdivision_point_x,
+										'y': new_subdivision_point_y
+									});
+	
+									old_segment_length -= current_segment_length;
+									current_segment_length = segment_length;
+								}
+								current_segment_length -= old_segment_length;
+							}
+							new_subdivision_points.push(data_nodes[data_edges[e_idx].target]); //target
+							subdivision_points_for_edge[e_idx] = new_subdivision_points;
+						}
+				}
+			}
+	
+			/*** ********************** ***/
+	
+			/*** Edge compatibility measures ***/
+			function angle_compatibility(P, Q) {
+				return Math.abs(vector_dot_product(edge_as_vector(P), edge_as_vector(Q)) / (edge_length(P) * edge_length(Q)));
+			}
+	
+			function scale_compatibility(P, Q) {
+				var lavg = (edge_length(P) + edge_length(Q)) / 2.0;
+				return 2.0 / (lavg / Math.min(edge_length(P), edge_length(Q)) + Math.max(edge_length(P), edge_length(Q)) / lavg);
+			}
+	
+			function position_compatibility(P, Q) {
+				var lavg = (edge_length(P) + edge_length(Q)) / 2.0;
+				var midP = {
+					'x': (data_nodes[P.source].x + data_nodes[P.target].x) / 2.0,
+					'y': (data_nodes[P.source].y + data_nodes[P.target].y) / 2.0
+				};
+				var midQ = {
+					'x': (data_nodes[Q.source].x + data_nodes[Q.target].x) / 2.0,
+					'y': (data_nodes[Q.source].y + data_nodes[Q.target].y) / 2.0
+				};
+	
+				return lavg / (lavg + euclidean_distance(midP, midQ));
+			}
+	
+			function edge_visibility(P, Q) {
+				var I0 = project_point_on_line(data_nodes[Q.source], {
+					'source': data_nodes[P.source],
+					'target': data_nodes[P.target]
+				});
+				var I1 = project_point_on_line(data_nodes[Q.target], {
+					'source': data_nodes[P.source],
+					'target': data_nodes[P.target]
+				}); //send actual edge points positions
+				var midI = {
+					'x': (I0.x + I1.x) / 2.0,
+					'y': (I0.y + I1.y) / 2.0
+				};
+				var midP = {
+					'x': (data_nodes[P.source].x + data_nodes[P.target].x) / 2.0,
+					'y': (data_nodes[P.source].y + data_nodes[P.target].y) / 2.0
+				};
+	
+				return Math.max(0, 1 - 2 * euclidean_distance(midP, midI) / euclidean_distance(I0, I1));
+			}
+	
+			function visibility_compatibility(P, Q) {
+				return Math.min(edge_visibility(P, Q), edge_visibility(Q, P));
+			}
+	
+			function compatibility_score(P, Q) {
+				return angle_compatibility(P, Q) * scale_compatibility(P, Q) * position_compatibility(P, Q) * visibility_compatibility(P, Q);
+			}
+	
+			function are_compatible(P, Q) {
+				return compatibility_score(P, Q) >= compatibility_threshold;
+			}
+	
+			function compute_compatibility_lists() {
+				for (var e = 0; e < data_edges.length - 1; e++) {
+					for (var oe = e + 1; oe < data_edges.length; oe++) {
+						// don't want any duplicates
+						if (are_compatible(data_edges[e], data_edges[oe])) {
+							compatibility_list_for_edge[e].push(oe);
+							compatibility_list_for_edge[oe].push(e);
+						}
+					}
+				}
+			}
+	
+			/*** ************************ ***/
+	
+			/*** Main Bundling Loop Methods ***/
+			var forcebundle = function forcebundle() {
+				var S = S_initial;
+				var I = I_initial;
+				var P = P_initial;
+	
+				initialize_edge_subdivisions();
+				initialize_compatibility_lists();
+				update_edge_divisions(P);
+				compute_compatibility_lists();
+	
+				for (var cycle = 0; cycle < C; cycle++) {
+					for (var iteration = 0; iteration < I; iteration++) {
+						var forces = [];
+						for (var edge = 0; edge < data_edges.length; edge++) {
+							forces[edge] = apply_resulting_forces_on_subdivision_points(edge, P, S);
+						}
+						for (var e = 0; e < data_edges.length; e++) {
+							for (var i = 0; i < P + 1; i++) {
+								subdivision_points_for_edge[e][i].x += forces[e][i].x;
+								subdivision_points_for_edge[e][i].y += forces[e][i].y;
+							}
+						}
+					}
+					// prepare for next cycle
+					S = S / 2;
+					P = P * P_rate;
+					I = I_rate * I;
+	
+					update_edge_divisions(P);
+					//console.log('C' + cycle);
+					//console.log('P' + P);
+					//console.log('S' + S);
+				}
+				return subdivision_points_for_edge;
+			};
+			/*** ************************ ***/
+	
+			/*** Getters/Setters Methods ***/
+			forcebundle.nodes = function (nl) {
+				if (arguments.length === 0) {
+					return data_nodes;
+				} else {
+					data_nodes = nl;
+				}
+	
+				return forcebundle;
+			};
+	
+			forcebundle.edges = function (ll) {
+				if (arguments.length === 0) {
+					return data_edges;
+				} else {
+					data_edges = filter_self_loops(ll); //remove edges to from to the same point
+				}
+	
+				return forcebundle;
+			};
+	
+			forcebundle.bundling_stiffness = function (k) {
+				if (arguments.length === 0) {
+					return K;
+				} else {
+					K = k;
+				}
+	
+				return forcebundle;
+			};
+	
+			forcebundle.step_size = function (step) {
+				if (arguments.length === 0) {
+					return S_initial;
+				} else {
+					S_initial = step;
+				}
+	
+				return forcebundle;
+			};
+	
+			forcebundle.cycles = function (c) {
+				if (arguments.length === 0) {
+					return C;
+				} else {
+					C = c;
+				}
+	
+				return forcebundle;
+			};
+	
+			forcebundle.iterations = function (i) {
+				if (arguments.length === 0) {
+					return I_initial;
+				} else {
+					I_initial = i;
+				}
+	
+				return forcebundle;
+			};
+	
+			forcebundle.iterations_rate = function (i) {
+				if (arguments.length === 0) {
+					return I_rate;
+				} else {
+					I_rate = i;
+				}
+	
+				return forcebundle;
+			};
+	
+			forcebundle.subdivision_points_seed = function (p) {
+				if (arguments.length == 0) {
+					return P;
+				} else {
+					P = p;
+				}
+	
+				return forcebundle;
+			};
+	
+			forcebundle.subdivision_rate = function (r) {
+				if (arguments.length === 0) {
+					return P_rate;
+				} else {
+					P_rate = r;
+				}
+	
+				return forcebundle;
+			};
+	
+			forcebundle.compatibility_threshold = function (t) {
+				if (arguments.length === 0) {
+					return compatibility_threshold;
+				} else {
+					compatibility_threshold = t;
+				}
+	
+				return forcebundle;
+			};
+	
+			/*** ************************ ***/
+	
+			return forcebundle;
+		};
+	}();
+	
+	exports.default = edgeBundling;
+
+/***/ },
 /* 14 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = __webpack_require__(15);
+
+
+/***/ },
+/* 15 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var __WEBPACK_AMD_DEFINE_FACTORY__, __WEBPACK_AMD_DEFINE_RESULT__;// This product includes color specifications and designs developed by Cynthia Brewer (http://colorbrewer.org/).
+	// JavaScript specs as packaged in the D3 library (d3js.org). Please see license at http://colorbrewer.org/export/LICENSE.txt
+	!function() {
+	
+	var colorbrewer = {YlGn: {
+	3: ["#f7fcb9","#addd8e","#31a354"],
+	4: ["#ffffcc","#c2e699","#78c679","#238443"],
+	5: ["#ffffcc","#c2e699","#78c679","#31a354","#006837"],
+	6: ["#ffffcc","#d9f0a3","#addd8e","#78c679","#31a354","#006837"],
+	7: ["#ffffcc","#d9f0a3","#addd8e","#78c679","#41ab5d","#238443","#005a32"],
+	8: ["#ffffe5","#f7fcb9","#d9f0a3","#addd8e","#78c679","#41ab5d","#238443","#005a32"],
+	9: ["#ffffe5","#f7fcb9","#d9f0a3","#addd8e","#78c679","#41ab5d","#238443","#006837","#004529"]
+	},YlGnBu: {
+	3: ["#edf8b1","#7fcdbb","#2c7fb8"],
+	4: ["#ffffcc","#a1dab4","#41b6c4","#225ea8"],
+	5: ["#ffffcc","#a1dab4","#41b6c4","#2c7fb8","#253494"],
+	6: ["#ffffcc","#c7e9b4","#7fcdbb","#41b6c4","#2c7fb8","#253494"],
+	7: ["#ffffcc","#c7e9b4","#7fcdbb","#41b6c4","#1d91c0","#225ea8","#0c2c84"],
+	8: ["#ffffd9","#edf8b1","#c7e9b4","#7fcdbb","#41b6c4","#1d91c0","#225ea8","#0c2c84"],
+	9: ["#ffffd9","#edf8b1","#c7e9b4","#7fcdbb","#41b6c4","#1d91c0","#225ea8","#253494","#081d58"]
+	},GnBu: {
+	3: ["#e0f3db","#a8ddb5","#43a2ca"],
+	4: ["#f0f9e8","#bae4bc","#7bccc4","#2b8cbe"],
+	5: ["#f0f9e8","#bae4bc","#7bccc4","#43a2ca","#0868ac"],
+	6: ["#f0f9e8","#ccebc5","#a8ddb5","#7bccc4","#43a2ca","#0868ac"],
+	7: ["#f0f9e8","#ccebc5","#a8ddb5","#7bccc4","#4eb3d3","#2b8cbe","#08589e"],
+	8: ["#f7fcf0","#e0f3db","#ccebc5","#a8ddb5","#7bccc4","#4eb3d3","#2b8cbe","#08589e"],
+	9: ["#f7fcf0","#e0f3db","#ccebc5","#a8ddb5","#7bccc4","#4eb3d3","#2b8cbe","#0868ac","#084081"]
+	},BuGn: {
+	3: ["#e5f5f9","#99d8c9","#2ca25f"],
+	4: ["#edf8fb","#b2e2e2","#66c2a4","#238b45"],
+	5: ["#edf8fb","#b2e2e2","#66c2a4","#2ca25f","#006d2c"],
+	6: ["#edf8fb","#ccece6","#99d8c9","#66c2a4","#2ca25f","#006d2c"],
+	7: ["#edf8fb","#ccece6","#99d8c9","#66c2a4","#41ae76","#238b45","#005824"],
+	8: ["#f7fcfd","#e5f5f9","#ccece6","#99d8c9","#66c2a4","#41ae76","#238b45","#005824"],
+	9: ["#f7fcfd","#e5f5f9","#ccece6","#99d8c9","#66c2a4","#41ae76","#238b45","#006d2c","#00441b"]
+	},PuBuGn: {
+	3: ["#ece2f0","#a6bddb","#1c9099"],
+	4: ["#f6eff7","#bdc9e1","#67a9cf","#02818a"],
+	5: ["#f6eff7","#bdc9e1","#67a9cf","#1c9099","#016c59"],
+	6: ["#f6eff7","#d0d1e6","#a6bddb","#67a9cf","#1c9099","#016c59"],
+	7: ["#f6eff7","#d0d1e6","#a6bddb","#67a9cf","#3690c0","#02818a","#016450"],
+	8: ["#fff7fb","#ece2f0","#d0d1e6","#a6bddb","#67a9cf","#3690c0","#02818a","#016450"],
+	9: ["#fff7fb","#ece2f0","#d0d1e6","#a6bddb","#67a9cf","#3690c0","#02818a","#016c59","#014636"]
+	},PuBu: {
+	3: ["#ece7f2","#a6bddb","#2b8cbe"],
+	4: ["#f1eef6","#bdc9e1","#74a9cf","#0570b0"],
+	5: ["#f1eef6","#bdc9e1","#74a9cf","#2b8cbe","#045a8d"],
+	6: ["#f1eef6","#d0d1e6","#a6bddb","#74a9cf","#2b8cbe","#045a8d"],
+	7: ["#f1eef6","#d0d1e6","#a6bddb","#74a9cf","#3690c0","#0570b0","#034e7b"],
+	8: ["#fff7fb","#ece7f2","#d0d1e6","#a6bddb","#74a9cf","#3690c0","#0570b0","#034e7b"],
+	9: ["#fff7fb","#ece7f2","#d0d1e6","#a6bddb","#74a9cf","#3690c0","#0570b0","#045a8d","#023858"]
+	},BuPu: {
+	3: ["#e0ecf4","#9ebcda","#8856a7"],
+	4: ["#edf8fb","#b3cde3","#8c96c6","#88419d"],
+	5: ["#edf8fb","#b3cde3","#8c96c6","#8856a7","#810f7c"],
+	6: ["#edf8fb","#bfd3e6","#9ebcda","#8c96c6","#8856a7","#810f7c"],
+	7: ["#edf8fb","#bfd3e6","#9ebcda","#8c96c6","#8c6bb1","#88419d","#6e016b"],
+	8: ["#f7fcfd","#e0ecf4","#bfd3e6","#9ebcda","#8c96c6","#8c6bb1","#88419d","#6e016b"],
+	9: ["#f7fcfd","#e0ecf4","#bfd3e6","#9ebcda","#8c96c6","#8c6bb1","#88419d","#810f7c","#4d004b"]
+	},RdPu: {
+	3: ["#fde0dd","#fa9fb5","#c51b8a"],
+	4: ["#feebe2","#fbb4b9","#f768a1","#ae017e"],
+	5: ["#feebe2","#fbb4b9","#f768a1","#c51b8a","#7a0177"],
+	6: ["#feebe2","#fcc5c0","#fa9fb5","#f768a1","#c51b8a","#7a0177"],
+	7: ["#feebe2","#fcc5c0","#fa9fb5","#f768a1","#dd3497","#ae017e","#7a0177"],
+	8: ["#fff7f3","#fde0dd","#fcc5c0","#fa9fb5","#f768a1","#dd3497","#ae017e","#7a0177"],
+	9: ["#fff7f3","#fde0dd","#fcc5c0","#fa9fb5","#f768a1","#dd3497","#ae017e","#7a0177","#49006a"]
+	},PuRd: {
+	3: ["#e7e1ef","#c994c7","#dd1c77"],
+	4: ["#f1eef6","#d7b5d8","#df65b0","#ce1256"],
+	5: ["#f1eef6","#d7b5d8","#df65b0","#dd1c77","#980043"],
+	6: ["#f1eef6","#d4b9da","#c994c7","#df65b0","#dd1c77","#980043"],
+	7: ["#f1eef6","#d4b9da","#c994c7","#df65b0","#e7298a","#ce1256","#91003f"],
+	8: ["#f7f4f9","#e7e1ef","#d4b9da","#c994c7","#df65b0","#e7298a","#ce1256","#91003f"],
+	9: ["#f7f4f9","#e7e1ef","#d4b9da","#c994c7","#df65b0","#e7298a","#ce1256","#980043","#67001f"]
+	},OrRd: {
+	3: ["#fee8c8","#fdbb84","#e34a33"],
+	4: ["#fef0d9","#fdcc8a","#fc8d59","#d7301f"],
+	5: ["#fef0d9","#fdcc8a","#fc8d59","#e34a33","#b30000"],
+	6: ["#fef0d9","#fdd49e","#fdbb84","#fc8d59","#e34a33","#b30000"],
+	7: ["#fef0d9","#fdd49e","#fdbb84","#fc8d59","#ef6548","#d7301f","#990000"],
+	8: ["#fff7ec","#fee8c8","#fdd49e","#fdbb84","#fc8d59","#ef6548","#d7301f","#990000"],
+	9: ["#fff7ec","#fee8c8","#fdd49e","#fdbb84","#fc8d59","#ef6548","#d7301f","#b30000","#7f0000"]
+	},YlOrRd: {
+	3: ["#ffeda0","#feb24c","#f03b20"],
+	4: ["#ffffb2","#fecc5c","#fd8d3c","#e31a1c"],
+	5: ["#ffffb2","#fecc5c","#fd8d3c","#f03b20","#bd0026"],
+	6: ["#ffffb2","#fed976","#feb24c","#fd8d3c","#f03b20","#bd0026"],
+	7: ["#ffffb2","#fed976","#feb24c","#fd8d3c","#fc4e2a","#e31a1c","#b10026"],
+	8: ["#ffffcc","#ffeda0","#fed976","#feb24c","#fd8d3c","#fc4e2a","#e31a1c","#b10026"],
+	9: ["#ffffcc","#ffeda0","#fed976","#feb24c","#fd8d3c","#fc4e2a","#e31a1c","#bd0026","#800026"]
+	},YlOrBr: {
+	3: ["#fff7bc","#fec44f","#d95f0e"],
+	4: ["#ffffd4","#fed98e","#fe9929","#cc4c02"],
+	5: ["#ffffd4","#fed98e","#fe9929","#d95f0e","#993404"],
+	6: ["#ffffd4","#fee391","#fec44f","#fe9929","#d95f0e","#993404"],
+	7: ["#ffffd4","#fee391","#fec44f","#fe9929","#ec7014","#cc4c02","#8c2d04"],
+	8: ["#ffffe5","#fff7bc","#fee391","#fec44f","#fe9929","#ec7014","#cc4c02","#8c2d04"],
+	9: ["#ffffe5","#fff7bc","#fee391","#fec44f","#fe9929","#ec7014","#cc4c02","#993404","#662506"]
+	},Purples: {
+	3: ["#efedf5","#bcbddc","#756bb1"],
+	4: ["#f2f0f7","#cbc9e2","#9e9ac8","#6a51a3"],
+	5: ["#f2f0f7","#cbc9e2","#9e9ac8","#756bb1","#54278f"],
+	6: ["#f2f0f7","#dadaeb","#bcbddc","#9e9ac8","#756bb1","#54278f"],
+	7: ["#f2f0f7","#dadaeb","#bcbddc","#9e9ac8","#807dba","#6a51a3","#4a1486"],
+	8: ["#fcfbfd","#efedf5","#dadaeb","#bcbddc","#9e9ac8","#807dba","#6a51a3","#4a1486"],
+	9: ["#fcfbfd","#efedf5","#dadaeb","#bcbddc","#9e9ac8","#807dba","#6a51a3","#54278f","#3f007d"]
+	},Blues: {
+	3: ["#deebf7","#9ecae1","#3182bd"],
+	4: ["#eff3ff","#bdd7e7","#6baed6","#2171b5"],
+	5: ["#eff3ff","#bdd7e7","#6baed6","#3182bd","#08519c"],
+	6: ["#eff3ff","#c6dbef","#9ecae1","#6baed6","#3182bd","#08519c"],
+	7: ["#eff3ff","#c6dbef","#9ecae1","#6baed6","#4292c6","#2171b5","#084594"],
+	8: ["#f7fbff","#deebf7","#c6dbef","#9ecae1","#6baed6","#4292c6","#2171b5","#084594"],
+	9: ["#f7fbff","#deebf7","#c6dbef","#9ecae1","#6baed6","#4292c6","#2171b5","#08519c","#08306b"]
+	},Greens: {
+	3: ["#e5f5e0","#a1d99b","#31a354"],
+	4: ["#edf8e9","#bae4b3","#74c476","#238b45"],
+	5: ["#edf8e9","#bae4b3","#74c476","#31a354","#006d2c"],
+	6: ["#edf8e9","#c7e9c0","#a1d99b","#74c476","#31a354","#006d2c"],
+	7: ["#edf8e9","#c7e9c0","#a1d99b","#74c476","#41ab5d","#238b45","#005a32"],
+	8: ["#f7fcf5","#e5f5e0","#c7e9c0","#a1d99b","#74c476","#41ab5d","#238b45","#005a32"],
+	9: ["#f7fcf5","#e5f5e0","#c7e9c0","#a1d99b","#74c476","#41ab5d","#238b45","#006d2c","#00441b"]
+	},Oranges: {
+	3: ["#fee6ce","#fdae6b","#e6550d"],
+	4: ["#feedde","#fdbe85","#fd8d3c","#d94701"],
+	5: ["#feedde","#fdbe85","#fd8d3c","#e6550d","#a63603"],
+	6: ["#feedde","#fdd0a2","#fdae6b","#fd8d3c","#e6550d","#a63603"],
+	7: ["#feedde","#fdd0a2","#fdae6b","#fd8d3c","#f16913","#d94801","#8c2d04"],
+	8: ["#fff5eb","#fee6ce","#fdd0a2","#fdae6b","#fd8d3c","#f16913","#d94801","#8c2d04"],
+	9: ["#fff5eb","#fee6ce","#fdd0a2","#fdae6b","#fd8d3c","#f16913","#d94801","#a63603","#7f2704"]
+	},Reds: {
+	3: ["#fee0d2","#fc9272","#de2d26"],
+	4: ["#fee5d9","#fcae91","#fb6a4a","#cb181d"],
+	5: ["#fee5d9","#fcae91","#fb6a4a","#de2d26","#a50f15"],
+	6: ["#fee5d9","#fcbba1","#fc9272","#fb6a4a","#de2d26","#a50f15"],
+	7: ["#fee5d9","#fcbba1","#fc9272","#fb6a4a","#ef3b2c","#cb181d","#99000d"],
+	8: ["#fff5f0","#fee0d2","#fcbba1","#fc9272","#fb6a4a","#ef3b2c","#cb181d","#99000d"],
+	9: ["#fff5f0","#fee0d2","#fcbba1","#fc9272","#fb6a4a","#ef3b2c","#cb181d","#a50f15","#67000d"]
+	},Greys: {
+	3: ["#f0f0f0","#bdbdbd","#636363"],
+	4: ["#f7f7f7","#cccccc","#969696","#525252"],
+	5: ["#f7f7f7","#cccccc","#969696","#636363","#252525"],
+	6: ["#f7f7f7","#d9d9d9","#bdbdbd","#969696","#636363","#252525"],
+	7: ["#f7f7f7","#d9d9d9","#bdbdbd","#969696","#737373","#525252","#252525"],
+	8: ["#ffffff","#f0f0f0","#d9d9d9","#bdbdbd","#969696","#737373","#525252","#252525"],
+	9: ["#ffffff","#f0f0f0","#d9d9d9","#bdbdbd","#969696","#737373","#525252","#252525","#000000"]
+	},PuOr: {
+	3: ["#f1a340","#f7f7f7","#998ec3"],
+	4: ["#e66101","#fdb863","#b2abd2","#5e3c99"],
+	5: ["#e66101","#fdb863","#f7f7f7","#b2abd2","#5e3c99"],
+	6: ["#b35806","#f1a340","#fee0b6","#d8daeb","#998ec3","#542788"],
+	7: ["#b35806","#f1a340","#fee0b6","#f7f7f7","#d8daeb","#998ec3","#542788"],
+	8: ["#b35806","#e08214","#fdb863","#fee0b6","#d8daeb","#b2abd2","#8073ac","#542788"],
+	9: ["#b35806","#e08214","#fdb863","#fee0b6","#f7f7f7","#d8daeb","#b2abd2","#8073ac","#542788"],
+	10: ["#7f3b08","#b35806","#e08214","#fdb863","#fee0b6","#d8daeb","#b2abd2","#8073ac","#542788","#2d004b"],
+	11: ["#7f3b08","#b35806","#e08214","#fdb863","#fee0b6","#f7f7f7","#d8daeb","#b2abd2","#8073ac","#542788","#2d004b"]
+	},BrBG: {
+	3: ["#d8b365","#f5f5f5","#5ab4ac"],
+	4: ["#a6611a","#dfc27d","#80cdc1","#018571"],
+	5: ["#a6611a","#dfc27d","#f5f5f5","#80cdc1","#018571"],
+	6: ["#8c510a","#d8b365","#f6e8c3","#c7eae5","#5ab4ac","#01665e"],
+	7: ["#8c510a","#d8b365","#f6e8c3","#f5f5f5","#c7eae5","#5ab4ac","#01665e"],
+	8: ["#8c510a","#bf812d","#dfc27d","#f6e8c3","#c7eae5","#80cdc1","#35978f","#01665e"],
+	9: ["#8c510a","#bf812d","#dfc27d","#f6e8c3","#f5f5f5","#c7eae5","#80cdc1","#35978f","#01665e"],
+	10: ["#543005","#8c510a","#bf812d","#dfc27d","#f6e8c3","#c7eae5","#80cdc1","#35978f","#01665e","#003c30"],
+	11: ["#543005","#8c510a","#bf812d","#dfc27d","#f6e8c3","#f5f5f5","#c7eae5","#80cdc1","#35978f","#01665e","#003c30"]
+	},PRGn: {
+	3: ["#af8dc3","#f7f7f7","#7fbf7b"],
+	4: ["#7b3294","#c2a5cf","#a6dba0","#008837"],
+	5: ["#7b3294","#c2a5cf","#f7f7f7","#a6dba0","#008837"],
+	6: ["#762a83","#af8dc3","#e7d4e8","#d9f0d3","#7fbf7b","#1b7837"],
+	7: ["#762a83","#af8dc3","#e7d4e8","#f7f7f7","#d9f0d3","#7fbf7b","#1b7837"],
+	8: ["#762a83","#9970ab","#c2a5cf","#e7d4e8","#d9f0d3","#a6dba0","#5aae61","#1b7837"],
+	9: ["#762a83","#9970ab","#c2a5cf","#e7d4e8","#f7f7f7","#d9f0d3","#a6dba0","#5aae61","#1b7837"],
+	10: ["#40004b","#762a83","#9970ab","#c2a5cf","#e7d4e8","#d9f0d3","#a6dba0","#5aae61","#1b7837","#00441b"],
+	11: ["#40004b","#762a83","#9970ab","#c2a5cf","#e7d4e8","#f7f7f7","#d9f0d3","#a6dba0","#5aae61","#1b7837","#00441b"]
+	},PiYG: {
+	3: ["#e9a3c9","#f7f7f7","#a1d76a"],
+	4: ["#d01c8b","#f1b6da","#b8e186","#4dac26"],
+	5: ["#d01c8b","#f1b6da","#f7f7f7","#b8e186","#4dac26"],
+	6: ["#c51b7d","#e9a3c9","#fde0ef","#e6f5d0","#a1d76a","#4d9221"],
+	7: ["#c51b7d","#e9a3c9","#fde0ef","#f7f7f7","#e6f5d0","#a1d76a","#4d9221"],
+	8: ["#c51b7d","#de77ae","#f1b6da","#fde0ef","#e6f5d0","#b8e186","#7fbc41","#4d9221"],
+	9: ["#c51b7d","#de77ae","#f1b6da","#fde0ef","#f7f7f7","#e6f5d0","#b8e186","#7fbc41","#4d9221"],
+	10: ["#8e0152","#c51b7d","#de77ae","#f1b6da","#fde0ef","#e6f5d0","#b8e186","#7fbc41","#4d9221","#276419"],
+	11: ["#8e0152","#c51b7d","#de77ae","#f1b6da","#fde0ef","#f7f7f7","#e6f5d0","#b8e186","#7fbc41","#4d9221","#276419"]
+	},RdBu: {
+	3: ["#ef8a62","#f7f7f7","#67a9cf"],
+	4: ["#ca0020","#f4a582","#92c5de","#0571b0"],
+	5: ["#ca0020","#f4a582","#f7f7f7","#92c5de","#0571b0"],
+	6: ["#b2182b","#ef8a62","#fddbc7","#d1e5f0","#67a9cf","#2166ac"],
+	7: ["#b2182b","#ef8a62","#fddbc7","#f7f7f7","#d1e5f0","#67a9cf","#2166ac"],
+	8: ["#b2182b","#d6604d","#f4a582","#fddbc7","#d1e5f0","#92c5de","#4393c3","#2166ac"],
+	9: ["#b2182b","#d6604d","#f4a582","#fddbc7","#f7f7f7","#d1e5f0","#92c5de","#4393c3","#2166ac"],
+	10: ["#67001f","#b2182b","#d6604d","#f4a582","#fddbc7","#d1e5f0","#92c5de","#4393c3","#2166ac","#053061"],
+	11: ["#67001f","#b2182b","#d6604d","#f4a582","#fddbc7","#f7f7f7","#d1e5f0","#92c5de","#4393c3","#2166ac","#053061"]
+	},RdGy: {
+	3: ["#ef8a62","#ffffff","#999999"],
+	4: ["#ca0020","#f4a582","#bababa","#404040"],
+	5: ["#ca0020","#f4a582","#ffffff","#bababa","#404040"],
+	6: ["#b2182b","#ef8a62","#fddbc7","#e0e0e0","#999999","#4d4d4d"],
+	7: ["#b2182b","#ef8a62","#fddbc7","#ffffff","#e0e0e0","#999999","#4d4d4d"],
+	8: ["#b2182b","#d6604d","#f4a582","#fddbc7","#e0e0e0","#bababa","#878787","#4d4d4d"],
+	9: ["#b2182b","#d6604d","#f4a582","#fddbc7","#ffffff","#e0e0e0","#bababa","#878787","#4d4d4d"],
+	10: ["#67001f","#b2182b","#d6604d","#f4a582","#fddbc7","#e0e0e0","#bababa","#878787","#4d4d4d","#1a1a1a"],
+	11: ["#67001f","#b2182b","#d6604d","#f4a582","#fddbc7","#ffffff","#e0e0e0","#bababa","#878787","#4d4d4d","#1a1a1a"]
+	},RdYlBu: {
+	3: ["#fc8d59","#ffffbf","#91bfdb"],
+	4: ["#d7191c","#fdae61","#abd9e9","#2c7bb6"],
+	5: ["#d7191c","#fdae61","#ffffbf","#abd9e9","#2c7bb6"],
+	6: ["#d73027","#fc8d59","#fee090","#e0f3f8","#91bfdb","#4575b4"],
+	7: ["#d73027","#fc8d59","#fee090","#ffffbf","#e0f3f8","#91bfdb","#4575b4"],
+	8: ["#d73027","#f46d43","#fdae61","#fee090","#e0f3f8","#abd9e9","#74add1","#4575b4"],
+	9: ["#d73027","#f46d43","#fdae61","#fee090","#ffffbf","#e0f3f8","#abd9e9","#74add1","#4575b4"],
+	10: ["#a50026","#d73027","#f46d43","#fdae61","#fee090","#e0f3f8","#abd9e9","#74add1","#4575b4","#313695"],
+	11: ["#a50026","#d73027","#f46d43","#fdae61","#fee090","#ffffbf","#e0f3f8","#abd9e9","#74add1","#4575b4","#313695"]
+	},Spectral: {
+	3: ["#fc8d59","#ffffbf","#99d594"],
+	4: ["#d7191c","#fdae61","#abdda4","#2b83ba"],
+	5: ["#d7191c","#fdae61","#ffffbf","#abdda4","#2b83ba"],
+	6: ["#d53e4f","#fc8d59","#fee08b","#e6f598","#99d594","#3288bd"],
+	7: ["#d53e4f","#fc8d59","#fee08b","#ffffbf","#e6f598","#99d594","#3288bd"],
+	8: ["#d53e4f","#f46d43","#fdae61","#fee08b","#e6f598","#abdda4","#66c2a5","#3288bd"],
+	9: ["#d53e4f","#f46d43","#fdae61","#fee08b","#ffffbf","#e6f598","#abdda4","#66c2a5","#3288bd"],
+	10: ["#9e0142","#d53e4f","#f46d43","#fdae61","#fee08b","#e6f598","#abdda4","#66c2a5","#3288bd","#5e4fa2"],
+	11: ["#9e0142","#d53e4f","#f46d43","#fdae61","#fee08b","#ffffbf","#e6f598","#abdda4","#66c2a5","#3288bd","#5e4fa2"]
+	},RdYlGn: {
+	3: ["#fc8d59","#ffffbf","#91cf60"],
+	4: ["#d7191c","#fdae61","#a6d96a","#1a9641"],
+	5: ["#d7191c","#fdae61","#ffffbf","#a6d96a","#1a9641"],
+	6: ["#d73027","#fc8d59","#fee08b","#d9ef8b","#91cf60","#1a9850"],
+	7: ["#d73027","#fc8d59","#fee08b","#ffffbf","#d9ef8b","#91cf60","#1a9850"],
+	8: ["#d73027","#f46d43","#fdae61","#fee08b","#d9ef8b","#a6d96a","#66bd63","#1a9850"],
+	9: ["#d73027","#f46d43","#fdae61","#fee08b","#ffffbf","#d9ef8b","#a6d96a","#66bd63","#1a9850"],
+	10: ["#a50026","#d73027","#f46d43","#fdae61","#fee08b","#d9ef8b","#a6d96a","#66bd63","#1a9850","#006837"],
+	11: ["#a50026","#d73027","#f46d43","#fdae61","#fee08b","#ffffbf","#d9ef8b","#a6d96a","#66bd63","#1a9850","#006837"]
+	},Accent: {
+	3: ["#7fc97f","#beaed4","#fdc086"],
+	4: ["#7fc97f","#beaed4","#fdc086","#ffff99"],
+	5: ["#7fc97f","#beaed4","#fdc086","#ffff99","#386cb0"],
+	6: ["#7fc97f","#beaed4","#fdc086","#ffff99","#386cb0","#f0027f"],
+	7: ["#7fc97f","#beaed4","#fdc086","#ffff99","#386cb0","#f0027f","#bf5b17"],
+	8: ["#7fc97f","#beaed4","#fdc086","#ffff99","#386cb0","#f0027f","#bf5b17","#666666"]
+	},Dark2: {
+	3: ["#1b9e77","#d95f02","#7570b3"],
+	4: ["#1b9e77","#d95f02","#7570b3","#e7298a"],
+	5: ["#1b9e77","#d95f02","#7570b3","#e7298a","#66a61e"],
+	6: ["#1b9e77","#d95f02","#7570b3","#e7298a","#66a61e","#e6ab02"],
+	7: ["#1b9e77","#d95f02","#7570b3","#e7298a","#66a61e","#e6ab02","#a6761d"],
+	8: ["#1b9e77","#d95f02","#7570b3","#e7298a","#66a61e","#e6ab02","#a6761d","#666666"]
+	},Paired: {
+	3: ["#a6cee3","#1f78b4","#b2df8a"],
+	4: ["#a6cee3","#1f78b4","#b2df8a","#33a02c"],
+	5: ["#a6cee3","#1f78b4","#b2df8a","#33a02c","#fb9a99"],
+	6: ["#a6cee3","#1f78b4","#b2df8a","#33a02c","#fb9a99","#e31a1c"],
+	7: ["#a6cee3","#1f78b4","#b2df8a","#33a02c","#fb9a99","#e31a1c","#fdbf6f"],
+	8: ["#a6cee3","#1f78b4","#b2df8a","#33a02c","#fb9a99","#e31a1c","#fdbf6f","#ff7f00"],
+	9: ["#a6cee3","#1f78b4","#b2df8a","#33a02c","#fb9a99","#e31a1c","#fdbf6f","#ff7f00","#cab2d6"],
+	10: ["#a6cee3","#1f78b4","#b2df8a","#33a02c","#fb9a99","#e31a1c","#fdbf6f","#ff7f00","#cab2d6","#6a3d9a"],
+	11: ["#a6cee3","#1f78b4","#b2df8a","#33a02c","#fb9a99","#e31a1c","#fdbf6f","#ff7f00","#cab2d6","#6a3d9a","#ffff99"],
+	12: ["#a6cee3","#1f78b4","#b2df8a","#33a02c","#fb9a99","#e31a1c","#fdbf6f","#ff7f00","#cab2d6","#6a3d9a","#ffff99","#b15928"]
+	},Pastel1: {
+	3: ["#fbb4ae","#b3cde3","#ccebc5"],
+	4: ["#fbb4ae","#b3cde3","#ccebc5","#decbe4"],
+	5: ["#fbb4ae","#b3cde3","#ccebc5","#decbe4","#fed9a6"],
+	6: ["#fbb4ae","#b3cde3","#ccebc5","#decbe4","#fed9a6","#ffffcc"],
+	7: ["#fbb4ae","#b3cde3","#ccebc5","#decbe4","#fed9a6","#ffffcc","#e5d8bd"],
+	8: ["#fbb4ae","#b3cde3","#ccebc5","#decbe4","#fed9a6","#ffffcc","#e5d8bd","#fddaec"],
+	9: ["#fbb4ae","#b3cde3","#ccebc5","#decbe4","#fed9a6","#ffffcc","#e5d8bd","#fddaec","#f2f2f2"]
+	},Pastel2: {
+	3: ["#b3e2cd","#fdcdac","#cbd5e8"],
+	4: ["#b3e2cd","#fdcdac","#cbd5e8","#f4cae4"],
+	5: ["#b3e2cd","#fdcdac","#cbd5e8","#f4cae4","#e6f5c9"],
+	6: ["#b3e2cd","#fdcdac","#cbd5e8","#f4cae4","#e6f5c9","#fff2ae"],
+	7: ["#b3e2cd","#fdcdac","#cbd5e8","#f4cae4","#e6f5c9","#fff2ae","#f1e2cc"],
+	8: ["#b3e2cd","#fdcdac","#cbd5e8","#f4cae4","#e6f5c9","#fff2ae","#f1e2cc","#cccccc"]
+	},Set1: {
+	3: ["#e41a1c","#377eb8","#4daf4a"],
+	4: ["#e41a1c","#377eb8","#4daf4a","#984ea3"],
+	5: ["#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00"],
+	6: ["#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00","#ffff33"],
+	7: ["#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00","#ffff33","#a65628"],
+	8: ["#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00","#ffff33","#a65628","#f781bf"],
+	9: ["#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00","#ffff33","#a65628","#f781bf","#999999"]
+	},Set2: {
+	3: ["#66c2a5","#fc8d62","#8da0cb"],
+	4: ["#66c2a5","#fc8d62","#8da0cb","#e78ac3"],
+	5: ["#66c2a5","#fc8d62","#8da0cb","#e78ac3","#a6d854"],
+	6: ["#66c2a5","#fc8d62","#8da0cb","#e78ac3","#a6d854","#ffd92f"],
+	7: ["#66c2a5","#fc8d62","#8da0cb","#e78ac3","#a6d854","#ffd92f","#e5c494"],
+	8: ["#66c2a5","#fc8d62","#8da0cb","#e78ac3","#a6d854","#ffd92f","#e5c494","#b3b3b3"]
+	},Set3: {
+	3: ["#8dd3c7","#ffffb3","#bebada"],
+	4: ["#8dd3c7","#ffffb3","#bebada","#fb8072"],
+	5: ["#8dd3c7","#ffffb3","#bebada","#fb8072","#80b1d3"],
+	6: ["#8dd3c7","#ffffb3","#bebada","#fb8072","#80b1d3","#fdb462"],
+	7: ["#8dd3c7","#ffffb3","#bebada","#fb8072","#80b1d3","#fdb462","#b3de69"],
+	8: ["#8dd3c7","#ffffb3","#bebada","#fb8072","#80b1d3","#fdb462","#b3de69","#fccde5"],
+	9: ["#8dd3c7","#ffffb3","#bebada","#fb8072","#80b1d3","#fdb462","#b3de69","#fccde5","#d9d9d9"],
+	10: ["#8dd3c7","#ffffb3","#bebada","#fb8072","#80b1d3","#fdb462","#b3de69","#fccde5","#d9d9d9","#bc80bd"],
+	11: ["#8dd3c7","#ffffb3","#bebada","#fb8072","#80b1d3","#fdb462","#b3de69","#fccde5","#d9d9d9","#bc80bd","#ccebc5"],
+	12: ["#8dd3c7","#ffffb3","#bebada","#fb8072","#80b1d3","#fdb462","#b3de69","#fccde5","#d9d9d9","#bc80bd","#ccebc5","#ffed6f"]
+	}};
+	
+	if (true) {
+	    !(__WEBPACK_AMD_DEFINE_FACTORY__ = (colorbrewer), __WEBPACK_AMD_DEFINE_RESULT__ = (typeof __WEBPACK_AMD_DEFINE_FACTORY__ === 'function' ? (__WEBPACK_AMD_DEFINE_FACTORY__.call(exports, __webpack_require__, exports, module)) : __WEBPACK_AMD_DEFINE_FACTORY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+	} else if (typeof module === "object" && module.exports) {
+	    module.exports = colorbrewer;
+	} else {
+	    this.colorbrewer = colorbrewer;
+	}
+	
+	}();
+
+
+/***/ },
+/* 16 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// style-loader: Adds some css to the DOM by adding a <style> tag
 	
 	// load the styles
-	var content = __webpack_require__(15);
+	var content = __webpack_require__(17);
 	if(typeof content === 'string') content = [[module.id, content, '']];
 	// add the styles to the DOM
-	var update = __webpack_require__(17)(content, {});
+	var update = __webpack_require__(19)(content, {});
 	if(content.locals) module.exports = content.locals;
 	// Hot Module Replacement
 	if(false) {
@@ -30950,10 +30361,10 @@
 	}
 
 /***/ },
-/* 15 */
+/* 17 */
 /***/ function(module, exports, __webpack_require__) {
 
-	exports = module.exports = __webpack_require__(16)();
+	exports = module.exports = __webpack_require__(18)();
 	// imports
 	
 	
@@ -30964,7 +30375,7 @@
 
 
 /***/ },
-/* 16 */
+/* 18 */
 /***/ function(module, exports) {
 
 	/*
@@ -31020,7 +30431,7 @@
 
 
 /***/ },
-/* 17 */
+/* 19 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/*

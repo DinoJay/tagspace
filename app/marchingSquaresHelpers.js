@@ -12,13 +12,13 @@ import d3 from "d3";
 //   .x(d => d.x)
 //   .y(d => d.y);
 
-function draw_marching_squares(callback, groups, isolevel = 0.0250,
-                                                          cell_size = 5) {
+function draw_marching_squares(callback, groups, isolevel = 0.0500,
+                                                          cell_size = 4) {
   // var isolevel = 0.0250;
   var epsilon = 0.00000001;
   var grid = {
     width: 1400,
-    height: 800 * 2
+    height: 1200
   };
 
   var set = []; //the current set for the bubble
@@ -182,6 +182,7 @@ function draw_marching_squares(callback, groups, isolevel = 0.0250,
         var cell = get_grid_cell(i*cell_size, j*cell_size);
 
         if (cell.status) {
+          // TODO: set[i].isolevel
           var segments = polygonize(cell, isolevel);
 
           // if(segments.length === 0) {

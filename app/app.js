@@ -7,19 +7,157 @@ import marching_squares from "./marchingSquaresHelpers.js";
 import offsetInterpolate from "./polyOffset.js";
 
 import edgeBundling from "./edgebundling.js";
+import brewer from "colorbrewer";
+
+import tagList from "./tagList.js";
+
+console.log("brewer", brewer);
+
+var o = d3.scale.ordinal()
+    .domain(["foo", "bar", "baz"])
+    .range(brewer.Paired[9]);
 
 var hullcolor = d3.scale.category20();
 
 var hullcurve = d3.svg.line()
-  .interpolate("basis-closed")
+  .interpolate("linear")
   .x(d => d.x)
   .y(d => d.y);
 
 var bundleLine = d3.svg.line()
             .x(d => d.x)
             .y(d => d.y)
-            .interpolate("linear");
+            .interpolate("monotone");
 
+function collide(node, energy) {
+  return function(quad, x1, y1, x2, y2) {
+    var updated = false;
+    if (quad.point && (quad.point !== node)) {
+
+      var x = node.x - quad.point.x,
+        y = node.y - quad.point.y,
+        xSpacing = (quad.point.width + node.width) / 2,
+        ySpacing = (quad.point.height + node.height) / 2,
+        absX = Math.abs(x),
+        absY = Math.abs(y),
+        l,
+        lx,
+        ly;
+
+      if (absX < xSpacing && absY < ySpacing) {
+        l = Math.sqrt(x * x + y * y);
+
+        lx = (absX - xSpacing) / l;
+        ly = (absY - ySpacing) / l;
+
+        // the one that's barely within the bounds probably triggered the collision
+        if (Math.abs(lx) > Math.abs(ly)) {
+          lx = 0;
+        } else {
+          ly = 0;
+        }
+
+        node.vx -= x *= lx;
+        node.vy -= y *= ly;
+        quad.point.vx += x;
+        quad.point.vy += y;
+
+        updated = true;
+      }
+    }
+    return updated;
+  };
+}
+
+var collide0 = function(nodes) {
+  return function(alpha) {
+    var quadtree = d3.geom.quadtree(nodes);
+      for (var i = 0, n = nodes.length; i < n; ++i) {
+        var d = nodes[i];
+        d.r = 50;
+        var nx1 = d.x - d.r,
+          nx2 = d.x + d.r,
+          ny1 = d.y - d.r,
+          ny2 = d.y + d.r;
+        quadtree.visit(function(quad, x1, y1, x2, y2) {
+          if (quad.point && (quad.point !== d) && quad.point.comp !== d.comp && quad.point.clicked && d.clicked) {
+            // console.log("quad.point", quad.point.comp, d.comp);
+            var x = d.x - quad.point.x,
+                y = d.y - quad.point.y,
+                l = Math.sqrt(x * x + y * y),
+                r = d.r + quad.point.r;
+
+            if (l < r) {
+              l = (l - r) / l * alpha;
+              d.x -= x *= l;
+              d.y -= y *= l;
+              quad.point.x += x;
+              quad.point.y += y;
+            }
+          }
+          return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
+        });
+      }
+    };
+};
+
+var collide_compose = function(nodes) {
+  var q = d3.geom.quadtree(nodes);
+  return function(alpha) {
+    for (var i = 0, n = nodes.length; i < n; ++i) {
+    // while (++i < n) {
+            // console.log("alpha", alpha);
+            q.visit(collide(nodes[i]), alpha);
+            // checkBounds(nodes[i]);
+    }
+  };
+};
+
+// var collide_rect = function(nodes) {
+//   var padding = 0;
+//   return function(alpha) {
+//     var quadtree = d3.geom.quadtree(nodes);
+//     var energy = alpha * 2;
+//       for (var i = 0, n = nodes.length; i < n; ++i) {
+//         var node = nodes[i];
+//         quadtree.visit(function(quad, x1, y1, x2, y2) {
+//           if (quad.point && (quad.point !== node) && quad.point.comp === node.comp) {
+//             var x = node.x - quad.point.x,
+//                 y = node.y - quad.point.y,
+//                 xSpacing = (quad.point.width + node.width + padding) / 2,
+//                 ySpacing = (quad.point.height + node.height + padding) / 2,
+//                 absX = Math.abs(x),
+//                 absY = Math.abs(y),
+//                 l,
+//                 lx,
+//                 ly;
+//
+//             if (absX < xSpacing && absY < ySpacing) {
+//                 l = Math.sqrt(x * x + y * y) * energy;
+//
+//                 lx = (absX - xSpacing) / l;
+//                 ly = (absY - ySpacing) / l;
+//
+//                 // the one that"s barely within the bounds probably triggered the collision
+//                 if (Math.abs(lx) > Math.abs(ly)) {
+//                         lx = 0;
+//                 } else {
+//                         ly = 0;
+//                 }
+//
+//                 node.vx -= x *= lx;
+//                 node.vy -= y *= ly;
+//                 quad.point.vx += x;
+//                 quad.point.vy += y;
+//
+//                 // updated = true;
+//             }
+//           }
+//         });
+//     }
+//      // return updated;
+//     };
+// };
 
 // function force(alpha) {
 //   for (var i = 0, n = nodes.length, node, k = alpha * 0.1; i < n; ++i) {
@@ -110,12 +248,8 @@ function cropHullLabels(d, path) {
 
 require("./style/style.less");
 
-var labelLine = d3.svg.line()
-  .x(d => d.x)
-  .y(d => d.y)
-  .interpolate(offsetInterpolate(15));
 
-var width = 1400;//window.innerWidth;
+var width = 1000;//window.innerWidth;
 var height = 600;//window.innerHeight;
 
 var viewBox = {
@@ -180,21 +314,59 @@ function boundMargin(node, width, height, margin) {
 //   return groups.map(g => g.filter(d => d));
 // }
 
-function collide(node, padding, energy) {
+// function interCollide(node, padding, energy) {
+//     return function(quad) {
+//       var updated = false;
+//       if (quad.point && (quad.point !== node) && quad.point.comp !== node.comp && quad.point.clicked && node.clicked) {
+//         var x = node.x - quad.point.x,
+//             y = node.y - quad.point.y,
+//             xSpacing = (quad.point.width + node.width + padding) / 2,
+//             ySpacing = (quad.point.height + node.height + padding) / 2,
+//             absX = Math.abs(x),
+//             absY = Math.abs(y),
+//             l,
+//             lx,
+//             ly;
+//
+//         if (absX < xSpacing && absY < ySpacing) {
+//             l = Math.sqrt(x * x + y * y) * energy;
+//
+//             lx = (absX - xSpacing) / l;
+//             ly = (absY - ySpacing) / l;
+//
+//             // the one that"s barely within the bounds probably triggered the collision
+//             if (Math.abs(lx) > Math.abs(ly)) {
+//                     lx = 0;
+//             } else {
+//                     ly = 0;
+//             }
+//
+//             node.vx -= x *= lx;
+//             node.vy -= y *= ly;
+//             quad.point.vx += x;
+//             quad.point.vy += y;
+//
+//             updated = true;
+//         }
+//       }
+//       return updated;
+//     };
+// }
+
+function intraCollide(node, padding, energy) {
     return function(quad) {
       var updated = false;
-      if (quad.point && (quad.point !== node)) {
+      if (quad.point && (quad.point !== node) && quad.point.comp === node.comp) {
         var x = node.x - quad.point.x,
             y = node.y - quad.point.y,
-            xSpacing = (quad.point.width + node.width + padding) / 2,
-            ySpacing = (quad.point.height + node.height + padding) / 2,
+            xSpacing = (quad.point.width + (node.width) + padding) / 2,
+            ySpacing = (quad.point.height + (node.height) + padding) / 2,
             absX = Math.abs(x),
             absY = Math.abs(y),
             l,
             lx,
             ly;
 
-        // console.log("node", node.width);
         if (absX < xSpacing && absY < ySpacing) {
             l = Math.sqrt(x * x + y * y) * energy;
 
@@ -212,7 +384,6 @@ function collide(node, padding, energy) {
             node.y -= y *= ly;
             quad.point.x += x;
             quad.point.y += y;
-
 
             updated = true;
         }
@@ -305,34 +476,6 @@ var convert_edgelist_to_adjlist = function(vertices, edgelist) {
 };
 
 // Breadth First Search using adjacency list
-var bfs = function(v, adjlist, visited) {
-  var q = [];
-  var current_group = [];
-  var i, len, adjV, nextVertex;
-  q.push(v);
-  visited[v] = true;
-  var level = 0;
-  // var max = 10;
-  while (q.length > 0 /* && level <= 50 */) {
-    v = q.shift();
-    current_group.push(v);
-    // Go through adjacency list of vertex v, and push any unvisited
-    // vertex onto the queue.
-    // This is more efficient than our earlier approach of going
-    // through an edge list.
-    adjV = adjlist[v];
-    for (i = 0, len = adjV.length; i < len; i += 1) {
-      nextVertex = adjV[i];
-      if (!visited[nextVertex]) {
-        q.push(nextVertex);
-        visited[nextVertex] = true;
-      }
-    }
-    level += 1;
-  }
-  return current_group;
-};
-
 var groupPath = function(d) {
   if (d.nodes.length < 2) return null;
 
@@ -343,93 +486,17 @@ var groupPath = function(d) {
     return d.y;
   });
 
-// var fakePoints = [];
-  // d.nodes.forEach(function(e) {
-  //   var xOffset = 75;
-  //   var yOffset = 75;
-  //   fakePoints = fakePoints.concat([
-  //     // "0.7071" is the sine and cosine of 45 degree for corner points.
-  //     [e.x, (e.y + xOffset)],
-  //     [(e.x + (0.7071 * xOffset)), (e.y + (0.7071 * yOffset))],
-  //     [(e.x + xOffset), e.y],
-  //     [(e.x + (0.7071 * xOffset)), (e.y - (0.7071 * yOffset))],
-  //     [(e.x), (e.y - yOffset)],
-  //     [(e.x - (0.7071 * xOffset)), (e.y - (0.7071 * yOffset))],
-  //     [(e.x - xOffset), e.y],
-  //     [(e.x - (0.7071 * xOffset)), (e.y + (0.7071 * yOffset))]
-  //     ]);
-  // });
-  // // return null;
-  // // var h0 = labelLine(hull(d.nodes).reverse());
-  // var fh = d3.geom.hull(fakePoints);
-  // var first = fh[fh.length - 2];
-  // var rev = fh.reverse();
-  // var res = [first].concat(rev.slice(1, rev.length));
-  // res = rev;
+  var labelLine = d3.svg.line()
+    .x(d => d.x)
+    .y(d => d.y)
+    .interpolate(offsetInterpolate(d.clicked ? 30 : 15));
 
-  // var revH = [];
-  // for(var i = 0; i < fh.length - 1; i++) {
-  //
-  //   var ax = fh[i][0];
-  //   var bx = fh[i+1][0];
-  //   var ay = fh[i][1];
-  //   var by = fh[i+1][1];
-  //
-  //   if(ax > bx)  {
-  //     console.log("swap");
-  //     revH.push([bx, ay]);
-  //     fh[i+1] = [ax, by];
-  //   }
-  //   else revH.push([ax, ay]);
-  // }
-  // revH.push(fh[fh.length-1]);
-
-  // var ps = "M" + fh.join("L") + "Z";
-  // var revP = reversePath(ps);
-  // console.log("revP", revP);
   return labelLine(hull(d.nodes).reverse());
-  // return ps;
-  // return "M" + revP;
-
-  // // var h1 = offsetInterpolate(100)(d3.geom.hull(d.nodes.map(d => [d.x, d.y])).reverse());
-  // // d.points = h1.points;
-  // var h1 = offsetInterpolate(75)(d3.geom.hull(d.values.map(d => [d.x, d.y])).reverse());
-  // // return h1;
-  // var lp = pathParser(ll);
-
-  // console.log("ll", ll);
-  // return ll;
-
 };
 
-
-var labelPath = function(d) {
-  // if (d.values.length < 2) return null;
-
-  // var hull = d3.geom.hull()
-  //   .x(function(d) {
-  //   return d.x;
-  // }).y(function(d) {
-  //   return d.y;
-  // });
-
-  // var h0 = labelLine(hull(d).reverse());
-  // var h1 = offsetInterpolate(100)(d3.geom.hull(d.values.map(d => [d.x, d.y])).reverse());
-  // console.log("h1", h1);
-  // console.log("pathData", pathData);
-  // var h1 = "M" + h.map(d => [d.x, d.y]).join("L") + "Z";
-  // var sortedFakePoints = _.sortBy(d, d => d[1]);
-  // return "M" + h0.join("L") + "Z";
-  return d3.svg.line().interpolate("cardinal-closed")(d.values);
-  // return h0;
-
-};
-
-
-// var groupFill = function(d, i) { return fill(i & 3); };
 
 d3.json("diigo.json", function(error, data) {
-  var diigo = data.slice(0, 200).map((d, i)=> {
+  var diigo = data.slice(0, 300).map((d, i)=> {
     d.tags = d.tags.split(",");
     d.id = i;
     return d;
@@ -476,7 +543,13 @@ d3.json("diigo.json", function(error, data) {
                 .call(zoom)
                 .on("dblclick.zoom", null);
                 // .append("g");
-
+                //
+  svg.append("rect")
+        .attr("width", shiftedWidth)
+        .attr("height", shiftedHeight)
+        .style("pointer-events", "all")
+        .style("fill", "none");
+            //make transparent (vs black if commented-out)
   // svg.attr("transform", "scale(0.5)");
   // var elmnt = d3.select("svg").node();
 
@@ -507,12 +580,14 @@ d3.json("diigo.json", function(error, data) {
       e.center = d.center;
       e.width = 1;
       e.height = 2;
+      e.clicked = false;
       // e.tags = e.sets;
       return e;
     });
   }));
 
   var appliedComps = foci.comps().map(c => {
+    c.isolevel = 0.0050;
     c.sets.map(s => {
       s.values = s.values.map(on => {
         return nodes.find(n => n.id === on.id);
@@ -530,103 +605,61 @@ d3.json("diigo.json", function(error, data) {
   // console.log("force nodes", nodes, "length", nodes.length);
   // console.log("foci-groups", foci.groups());
 
-  var simulation = d3_force.forceSimulation(nodes)
-      .force("x", d3_force.forceX(d => d.center.x).strength(1))
-      .force("y", d3_force.forceY(d => d.center.y).strength(1))
-      // .force("centerCircle", function(alpha) {
-        // for (var i = 0, n = nodes.length, k = alpha ; i < n; ++i) {
-        //   var d = nodes[i];
-        //   // node.vx -= node.x * k;
-        //   // node.vy -= node.y * k;
-        //   var circle={x: shiftedWidth/2, y: shiftedHeight/2, r: 300};
-        //   var collision = rectCircleColliding(circle, d, false);
-        //   if (collision.bounce) {
-        //     d.vx = d.x + (collision.x) * ( k / 10000 );
-        //     d.vy = d.y + (collision.y) * ( k / 10000 );
-        //   }
-        // }
+  nodes.forEach(d => {
+    var cx = width / 2;
+    var cy  = (height + viewBox.top) / 2;
+    var m = 4;
+    var i = Math.floor(Math.random() * m);
+      // var m = i % 7 + 1;
+      // d.x = panels.top.cx;
+      // d.y = panels.top.cy + Math.random();
 
-      // });
+      // d.y = getRandomIntInclusive(0, height);
+      d.x = Math.cos(i / m * 2 * Math.PI) * 200 + cx + Math.random();
+      d.y = Math.sin(i / m * 2 * Math.PI) * 200 + cy  + Math.random();
+  });
+
+  var simulation = d3_force.forceSimulation(nodes)
       // .force("charge", d3_force.forceManyBody()
-      //                          .theta(2)
-      //                          .strength(2)
-      //                          .distanceMin(15)
+      //                    .strength(- 10)
+      //                    // .distanceMin(9)
+      //                    // .distanceMax(200)
       // )
+      .force("x", d3_force.forceX(d => d.center.x)
+        .strength(d => d.clicked ? 0 : 0.1)
+      )
+      .force("y", d3_force.forceY(d => d.center.y)
+        .strength(d => d.clicked ? 0 : 0.1)
+      )
+      .force("intraCollide", collide_compose(nodes))
+      // .force("interCollide", collide0(nodes));
       .alphaMin(0.3);
 
-  // var forceEdges = _.flattenDeep(foci.links().filter(l => l.source.nodes && l.target.nodes).map(l => {
-  //   return l.source.nodes.map(s => {
-  //     return l.target.nodes.map(t => {
-  //       return {
-  //         source: nodes.find(d => d.__setKey__ === s.__setKey__),
-  //         target: nodes.find(d => d.__setKey__ === t.__setKey__)
-  //         // intersec: l.intersec
-  //       };
-  //     });
-  //   });
-  // }));
-
-  // console.log("forceEdges", forceEdges);
-
-  //
-  // // this should look like:
-  // // console.log("edgeList", edgeList);
-  //
-  // var edgeList = forceEdges.map(e => [e.source.index, e.target.index]);
-  // var vertices = nodes.map(d => d.index);
-  // var adjList = convert_edgelist_to_adjlist(["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9"], example);
-
-  // console.log("adjList", adjList);
-
-  // var bicomps = foci.bicomps();
-  //
-  // console.log("bicomps", bicomps);
-  // console.log("biconnectedComponents", comps);
-  var spreadTags = _.flatten(nodes.map(d => d.tags));
-
-  // console.log("spreadTags", spreadTags);
+  var spreadNodes = _.flatten(nodes.map(d => d.tags.map(t => {
+    var copy = _.clone(d);
+    copy.key = t;
+    return copy;
+  })));
 
   var allTags = d3.nest()
-    .key(d => d)
-    .entries(spreadTags)
+    .key(d => d.key)
+    .entries(spreadNodes)
+    .map(n => {
+      var tags = _.uniq(_.flatten(n.values.map(v => v.tags)))
+        .filter(t => t !== n.key);
+      n.relatedTags = tags;
+      return n;
+    })
   .sort((a, b) => d3.descending(a.values.length, b.values.length));
+
+  console.log("allTags", allTags);
 
   var wordScale = d3.scale.linear()
       .domain(d3.extent(allTags, d => d.values.length))
       .rangeRound([7, 50]);
 
-  // var simple_gr = simple_comp(foci.data(), foci.reducedEdges());
-  // console.log("largest simple group", simple_gr.find(d => d.length > 50).filter(d => d.label));
-  // var complex_gr = bicomps.map(g => {
-  //   return g.map(i => nodes[i]);
-  // });
-  // console.log("bicomps", bicomps);
-  // console.log("largest complex group", gr.find(d => d.length > 50).filter(d => d.label));
-  // console.log("simple gr", simple_gr);
-
-  // var comps = simple_gr.map((g, i) => {
-  //   var nodes = _.flatten(g.map(d => d.nodes));
-  //   var tags = d3.nest()
-  //     .key(d => d)
-  //     // TODO: check it later
-  //     .entries(_.flatten(nodes.filter(d => d).map(d => d.tags)))
-  //   .sort((a, b) => d3.descending(a.values.length, b.values.length));
-  //
-  //   return {
-  //     id: i + "comp", values: g,
-  //     tags: tags,
-  //     // TODO: check later
-  //     nodes: nodes.filter(d => d)
-  //     // nodes: g
-  //   };
-  // });
-
-  // var cutEdges = foci.cutEdges();
-  // console.log("cutEdges", cutEdges);
-  //
-  // console.log("bundledEdgeSegments", bundledEdgeSegments);
-
   var boundzoom = function(d) {
+    // simulation.alphaTarget(0.7);
     var bbox = this.getBBox(),
       dx = bbox.width,
       dy = bbox.height + 50,
@@ -636,7 +669,7 @@ d3.json("diigo.json", function(error, data) {
       translate = [width / 2 - scale * x, (height + viewBox.top) / 2 - scale * y];
 
     // d3.select(this).attr("stroke", 0);
-    console.log("hull", d);
+    // console.log("hull", d);
     // var hullDocs = doc.filter(e => d.nodes.find(n => n.id === e.id));
     // console.log("hullDocs", hullDocs);
     zoom.translate(translate);
@@ -667,7 +700,7 @@ d3.json("diigo.json", function(error, data) {
       .selectAll(".label-cont")
       .data(foci.comps(), d => d.id);
 
-  console.log("foci comps", foci.comps());
+  // console.log("foci comps", foci.comps());
   var lcEnter = lc.enter();
 
   var tp = lcEnter
@@ -682,13 +715,6 @@ d3.json("diigo.json", function(error, data) {
       .attr("dominant-baseline", "baseline")
       .attr("id", d => "tp-hull" + d.id)
       .attr("xlink:href", d => "#hull " + d.id);
-
-  // var tp = lc.selectAll(".descr").select("textPath");
-  tp.each(d => {
-    d.scale = d3.scale.linear()
-      .domain(d3.extent(d.tags, d => d.values.length))
-      .rangeRound([5, 50]);
-  });
 
   tp.selectAll("tspan")
     .data(d => d.tags)
@@ -714,7 +740,26 @@ d3.json("diigo.json", function(error, data) {
       .style("opacity", 0.2)
       .attr("title", d => d.key)
       .attr("d", groupPath)
-      .on("click", boundzoom);
+      .on("click", function(d) {
+        d.clicked = true;
+        // d.isolevel = 0.0120;
+        d.isolevel = 0.0020;
+        var ids = d.nodes.map(d => d.id);
+        var hullNodes = d3.selectAll(".doc")
+          .filter(e => ids.indexOf(e.id) !== -1);
+
+        console.log("hullNodes", hullNodes);
+        hullNodes.each(function(d) {
+          d.width = 20;
+          d.height = 40;
+          d.clicked = true;
+          // d.fixed = true;
+        });
+
+        simulation.restart();
+        // hullNodes
+        // simulation.alphaTarget(0.7);
+      });
 
   var circle = svg.selectAll(".circle")
     .data(foci.data().filter(d => d.cut))
@@ -742,15 +787,15 @@ d3.json("diigo.json", function(error, data) {
     .attr("class", "doc")
     .append("rect")
       // .attr("transform", d => "translate(" + (-d.width / 2) + "," + (-d.height/ 2) + ")")
-      .attr("width", d => d.width)
-      .attr("height", d => d.height)
       .attr("rx", 0.05)
       .attr("ry", 0.05)
       .attr("stroke", "black")
       .attr("stroke-width", 0.5)
       .attr("fill",  "white")
+      .attr("width", d => d.width)
+      .attr("height", d => d.height)
       .append("title")
-        .text(function(d) { return d.__setKey__; });
+      .text(d => d.__setKey__);
 
   var thumb = doc
       .append("foreignObject", ":first-child")
@@ -841,65 +886,111 @@ d3.json("diigo.json", function(error, data) {
                         };
                     });
 
-    console.log("deepLinks", deepLinks);
+    // console.log("deepLinks", deepLinks);
 
     var fbundling = edgeBundling()
                     .step_size(1)
-                    .compatibility_threshold(0.1)
+                    .compatibility_threshold(0.35)
                     .nodes(nodes)
                     .edges(deepLinks);
 
-  var bundledEdgeSegments = fbundling();
+    var bundledEdgeSegments = fbundling();
 
     bundledEdgeSegments.forEach( d => {
     // for each of the arrays in the results
     // draw a line between the subdivions points for that edge
+        svg.selectAll(".bundle-line").remove();
         svg
           .insert("path", ":first-child")
-            .style("stroke-width", 1)
-            .style("stroke", "#ff2222")
-            .style("fill", "none")
-            .style("stroke-opacity", 0.3) //use opacity as blending
-          .attr("d", bundleLine(d));
+          .style("stroke-width", 1)
+          .style("stroke", "#ff2222")
+          .style("fill", "none")
+          .style("stroke-opacity", 0.3) //use opacity as blending;
+          .attr("d", bundleLine(d))
+          .attr("class", "bundle-link");
     });
 
-    marching_squares(group => {
-      // TODO: hull zoom
-      // this happens in a for loop
-      var backdrop = svg.select(".bubble-cont")
-         .selectAll(".backdrop")
-         .data(group.d);
+    // marching_squares(group => {
+    //   // TODO: hull zoom
+    //   // this happens in a for loop
+    //   var backdrop = svg.select(".bubble-cont")
+    //      .selectAll(".backdrop")
+    //      .data(group.d);
+    //
+    //   // console.log("group d", group.d);
+    //         // .attr("d", function(d){ return curve(d); })
+    //   backdrop.enter()
+    //     // .insert("path", ":first-child")
+    //     .append("path")
+    //     .attr("class", "backdrop")
+    //     .attr("stroke-linejoin", "round")
+    //     .attr("opacity", 0.1);
+    //         // .attr("id", (d, i) => "co" + i)
+    //
+    //   backdrop
+    //     .attr("d", d => hullcurve(d))
+    //     .attr("fill", "grey")
+    //     .attr("stroke", "lightgrey")
+    //     .on("click", boundzoom);
+    //     // .on("click", boundzoom)
+    //     // .on("mouseover", function(d) {
+    //     //   d3.select(this).attr("opacity", 1);
+    //     //   console.log("d", d);
+    //     // })
+    //     // .on("mouseout", function() {
+    //     //   d3.select(this).attr("opacity", 0.5);
+    //     // });
+    //
+    //   backdrop.exit().remove();
+    //
+    //   }, [{values: foci.data()}], 0.005);
 
-      // console.log("group d", group.d);
-            // .attr("d", function(d){ return curve(d); })
-      backdrop.enter()
-        // .insert("path", ":first-child")
-        .append("path")
-        .attr("class", "backdrop")
-        .attr("stroke-linejoin", "round")
-        .attr("opacity", 0.1);
-            // .attr("id", (d, i) => "co" + i)
 
-      backdrop
-        .attr("d", d => hullcurve(d))
-        .attr("fill", "grey")
-        .attr("stroke", "lightgrey")
-        .on("click", boundzoom);
-        // .on("click", boundzoom)
-        // .on("mouseover", function(d) {
-        //   d3.select(this).attr("opacity", 1);
-        //   console.log("d", d);
-        // })
-        // .on("mouseout", function() {
-        //   d3.select(this).attr("opacity", 0.5);
-        // });
-
-      backdrop.exit().remove();
-
-      }, [{values: foci.data()}], 0.005);
-
-    appliedComps.forEach((c, i)=> {
+    appliedComps.forEach((c, i) => {
       // console.log("current comp", c);
+      // c.sets.forEach(s => {
+      //   // console.log("set", s);
+      //   s.values = _.flatten(s.values.map(n => {
+      //     return [
+      //       {x: n.x, y: n.y},
+      //       {x: n.x, y: n.y + n.height},
+      //       {x: n.x + n.width, y: n.y},
+      //       {x: n.x + n.width, y: n.y + n.height}
+      //     ];
+      //   }));
+      // });
+      var bufSets;
+      if (c.clicked) {
+        var padding = 0;
+        bufSets = c.sets.map(s => {
+          return {
+            values: _.flatten(s.values.map(n => {
+                // n.x = n.x - n.width / 2;
+                // n.y = n.y - n.height / 2;
+              return [
+               {x: n.x, y: n.y},
+                {x: n.x, y: n.y + (n.height / 2) + padding},
+                {x: n.x, y: n.y - (n.height / 2) - padding},
+                {x: n.x + (n.width / 2) + padding, y: n.y},
+                {x: n.x - (n.width / 2) - padding, y: n.y},
+                // //
+                // {x: n.x + n.width / 2, y: n.y - (n.height / 2) - padding},
+                // {x: n.x + n.width / 2, y: n.y + (n.height / 2) - padding},
+                //
+                // {x: n.x - n.width / 2, y: n.y - (n.height / 2) - padding},
+                // {x: n.x - n.width / 2, y: n.y + (n.height / 2) - padding},
+
+                // {x: n.x - n.width / 4, y: n.y - n.height / 4},
+                // {x: n.x - n.width / 4, y: n.y + n.height / 4},
+                //
+                // {x: n.x + n.width / 4, y: n.y - n.height / 4},
+                // {x: n.x + n.width / 4, y: n.y + n.height / 4}
+              ];
+            }))
+          };
+        });
+      } else bufSets = c.sets;
+
       marching_squares(group => {
         // TODO: not running right now
         // console.log("group", group);
@@ -920,7 +1011,7 @@ d3.json("diigo.json", function(error, data) {
 
         bubble
           .attr("d", d => hullcurve(d))
-          .attr("fill", hullcolor(group.key))
+          .attr("fill", o(group.key))
           .on("click", boundzoom)
           .on("mouseover", function(d) {
             d3.select(this).attr("opacity", 1);
@@ -931,10 +1022,8 @@ d3.json("diigo.json", function(error, data) {
           });
 
         bubble.exit().remove();
-      }, c.sets);
-
+      }, bufSets, c.isolevel);
     });
-
 
     // link.enter()
     //   .insert("line", ":first-child")
@@ -951,28 +1040,15 @@ d3.json("diigo.json", function(error, data) {
 
   simulation.on("tick", function() {
 
-    // label.each(d => {
-    //   d.x = Math.max(d.width, Math.min(width - 2, d.x));
-    //   d.y = Math.max(d.height, Math.min(height - 2, d.y));
-    // });
-    // doc.each(d => {
-    //   d.x = Math.max(d.width, Math.min(width - 2, d.x));
-    //   d.y = Math.max(d.height, Math.min(height - 2, d.y));
+    // var q2 = d3.geom.quadtree(nodes);
+    // nodes.forEach(d => {
+    //   if (d.clicked){
+    //     // q2.visit(interCollide(d, 75, 8));
+    //     q2.visit(intraCollide(d, 5, 2));
+    //   }
     // });
 
-    var q2 = d3.geom.quadtree(nodes);
-    nodes.forEach(d => {
-      q2.visit(collide(d, 5, 1));
-      // var circle={x: shiftedWidth/2, y: shiftedHeight/2, r: 300};
-      // var collision = rectCircleColliding(circle, d, false);
-      // if (collision.bounce) {
-      //   d.x = d.x + (collision.x * d.x) * 0.01;
-      //   d.y = d.y + (collision.y * d.y) * 0.01;
-      // }
-      // boundPanel(d, panels.center, 1);
-    });
-
-    // label.each((collide(label.data(), e.alpha, 10)));
+    // label.each((interCollide(label.data(), e.alpha, 10)));
     //
 
     // doc.each(d => boundMargin(d, width, height, margin));
@@ -984,21 +1060,17 @@ d3.json("diigo.json", function(error, data) {
       cropHullLabels(d, d3.select(this));
     });
 
+    doc
+      .attr("transform", d => {
+        return "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")";
+      })
+      .select("rect")
+      .attr("width", d => d.width)
+      .attr("height", d => d.height);
 
-    doc.attr("transform", d => {
-      return "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")";
-    });
     label.attr("transform", d => {
       return "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")";
     });
-
-
-    // doc.attr("transform", function(d) { return "rotate(" + (d.x - 90) + ")translate(" + d.y + ")"; })
-    // doc.attr("x", d => d.x - d.width / 2 );
-    // doc.attr("y", d => d.y - d.width / 2 );
-
-
-
   });
 
 
@@ -1045,5 +1117,6 @@ d3.json("diigo.json", function(error, data) {
 
     // console.log("BBox", bbox, "preview", prev);
   });
-
+  console.log("foci hierarchy", foci.hierarchy());
+  tagList(simulation, foci.hierarchy());
 });

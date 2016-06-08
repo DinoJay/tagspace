@@ -1,7 +1,7 @@
 import d3 from "d3";
 import _ from "lodash";
 import d3_force from "d3-force";
-// import d3_hierarchy from "d3-hierarchy";
+import d3_hierarchy from "d3-hierarchy";
 
 var maxDepth = 1;
 var isCutEdge = (l, nodes, linkedByIndex) => {
@@ -10,33 +10,131 @@ var isCutEdge = (l, nodes, linkedByIndex) => {
   return l.level % maxDepth === 0 && targetDeg > 0;
 };
 
+function runTree(nodes, links) {
 
-function collideCircle(data, alpha, r) {
-  var quadtree = d3.geom.quadtree(data);
-  return function(d) {
-        var nx1 = d.x - r,
-          nx2 = d.x + r,
-          ny1 = d.y - r,
-          ny2 = d.y + r;
-      quadtree.visit(function(quad, x1, y1, x2, y2) {
-        if (quad.point && (quad.point !== d)) {
-          var x = d.x - quad.point.x,
-              y = d.y - quad.point.y,
-              l = Math.sqrt(x * x + y * y),
-              r = d.r + quad.point.r;
+  function hierarchy(cur, nodes, linkedByIndex) {
+    cur._children = neighbors(cur, linkedByIndex, nodes);
+    cur.value = cur._children.length;
+    cur.children = [];
+    // console.log("cur", cur);
+    // console.log("cur children", cur.children);
 
-          if (l < r) {
-            l = (l - r) / l * alpha;
-            d.vx -= x *= l;
-            d.vy -= y *= l;
-            quad.point.x += x;
-            quad.point.y += y;
-          }
-        }
-        return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
+    cur._children.forEach(next => {
+      // if(seen.indexOf(next) === -1)
+      hierarchy(next, nodes, linkedByIndex);
     });
+  }
+
+  function neighbors(a, linkedByIndex, nodes) {
+    var nb;
+    var nbs = [];
+
+    // console.log("a", a);
+    for (var property in linkedByIndex) {
+      var s = property.split(",").map(d => parseInt(d));
+      if (s[0] === a.index) {
+        // console.log("s[1]", s[1]);
+        nb = nodes[s[1]];
+        // console.log("nb", nb);
+        nbs.push(nb);
+      }
+    }
+    return nbs;
+  }
+  var linkedByIndex = {};
+
+  // var center = that._size.map(d => d/2);
+  var pack = d3_hierarchy.pack()
+      .size([300, 400])
+      // .radius(d => d.data.nodes.length * 32)
+      .padding(0);
+
+  var root = {
+    index:     nodes.length,
+    level:     0,
+    "__key__": "root",
+    sets     : [],
+    // children: nodes.filter(d => d.level === 0),
+    nodes: []
   };
+
+  nodes.forEach(d => {
+    // if (d.level === 1) {
+      links.push({
+        source: root.index,
+        target: d.index
+      });
+    // }
+  });
+
+  nodes.push(root);
+
+  links.forEach(function(d) {
+    linkedByIndex[d.source + "," + d.target] = true;
+  });
+
+  // var linkObjs = links.map(l => {
+  //   l.source = nodes[l.source];
+  //   l.target = nodes[l.target];
+  // });
+
+  hierarchy(root, nodes, linkedByIndex);
+  // var rootNode = d3_hierarchy.hierarchy(root);
+  // rootNode
+  //   .sum((d) => d.nodes.length);
+  //
+  // rootNode.sort((a, b) => a.data.nodes.length - b.data.nodes.length);
+
+  // pack(rootNode);
+  // var packed = rootNode.descendants();
+  // packed.forEach(p => {
+  //   p.data.tags = _.uniq(_.flatten(p.data.children.map(c => c.sets)));
+  // });
+  //
+  // // packed.forEach(d => {
+  // //   // console.log("pack d", d.x, d.y);
+  // //   d.data.center = {
+  // //     x: _.clone(d.x),
+  // //     y: _.clone(d.y)
+  // //   };
+  // // });
+  // //
+  // console.log("packed", packed.map(d => d.data).filter(d => d.children.length > 0));
+
+  return {root: root, linkedByIndex, nodes: nodes};//packed.map(d => d.data);
 }
+
+var collide = function(nodes) {
+  return function(alpha) {
+    var quadtree = d3.geom.quadtree(nodes);
+      for (var i = 0, n = nodes.length; i < n; ++i) {
+        var d = nodes[i];
+        d.r = 40;
+        var nx1 = d.x - d.r,
+          nx2 = d.x + d.r,
+          ny1 = d.y - d.r,
+          ny2 = d.y + d.r;
+        quadtree.visit(function(quad, x1, y1, x2, y2) {
+          if (quad.point && (quad.point !== d) && quad.point.comp !== d.comp && !d.label && !quad.point.label) {
+            // console.log("quad.point", quad.point.comp, d.comp)
+            var x = d.x - quad.point.x,
+                y = d.y - quad.point.y,
+                l = Math.sqrt(x * x + y * y),
+                r = d.r + quad.point.r;
+
+            if (l < r) {
+              l = (l - r) / l * alpha;
+              d.x -= x *= l;
+              d.y -= y *= l;
+              quad.point.x += x;
+              quad.point.y += y;
+            }
+          }
+          return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
+        });
+      }
+    };
+};
 
 function simple_comp(nodes, links) {
   var groups = [];
@@ -56,8 +154,7 @@ function simple_comp(nodes, links) {
 
   var vertices = nodes.map(d => d.index);
   var edgeList = links.map(l => {
-    var edge = [l.source.index, l.target.index];
-    return edge;
+    var edge = [l.source.index, l.target.index]; return edge;
   });
   // console.log("edgeList", edgeList);
 
@@ -180,10 +277,9 @@ function deriveSets(nodes) {
 
 function start() {
 
-
   function runForce(nodes, links, that) {
         // .on("tick", ticked);
-    console.log("CLOned LINX", _.cloneDeep(links));
+    // console.log("CLOned LINX", _.cloneDeep(links));
 
     // console.log("force Nodes", nodes);
     var center = that._size.map(d => d/2);
@@ -260,35 +356,11 @@ function start() {
                .iterations(4))
       // .force("position", d3_force.forcePosition());
       .force("collide", d3_force.forceCollide(d => d.label ? 0 : 7))
-      .force("specialCollide", (alpha) => {
-        var quadtree = d3.geom.quadtree(nodes);
-        for (var i = 0, n = nodes.length; i < n; ++i) {
-          var d = nodes[i];
-          d.r = 40;
-          var nx1 = d.x - d.r,
-            nx2 = d.x + d.r,
-            ny1 = d.y - d.r,
-            ny2 = d.y + d.r;
-          quadtree.visit(function(quad, x1, y1, x2, y2) {
-            if (quad.point && (quad.point !== d) && quad.point.comp !== d.comp && !d.label && !quad.point.label) {
-              // console.log("quad.point", quad.point.comp, d.comp)
-              var x = d.x - quad.point.x,
-                  y = d.y - quad.point.y,
-                  l = Math.sqrt(x * x + y * y),
-                  r = d.r + quad.point.r;
-
-              if (l < r) {
-                l = (l - r) / l * alpha;
-                d.x -= x *= l;
-                d.y -= y *= l;
-                quad.point.x += x;
-                quad.point.y += y;
-              }
-            }
-            return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
-          });
-        }
-      })
+      // .force("specialCollide", (alpha) => {
+      //   var quadtree = d3.geom.quadtree(nodes);
+      //   collide2(alpha, nodes, quadtree);
+      // })
+      .force("intraCollide", collide(nodes))
       .force("center", d3_force.forceCenter(...center));
 
     simulation.nodes(nodes);
@@ -304,16 +376,19 @@ function start() {
     that._reducedEdges = links.filter(l => !l.cut);
     that._cutEdges = links.filter(l => l.cut);
 
-    console.log("nODes", nodes);
-    console.log("cutEdges", that._cutEdges);
+    // console.log("nODes", nodes);
+    // console.log("cutEdges", that._cutEdges);
 
     var comps = simple_comp(nodes, that._reducedEdges).map((g, i) => {
       var id = i + "comp";
       var compNodes = _.flatten(g.map(d => d.nodes)).filter(d => d);
-      console.log("compNodes", compNodes);
+      // console.log("compNodes", compNodes);
       compNodes.forEach(cn => {
         nodes.forEach(n => {
-          if (cn.__setKey__ === n.__key__) n.comp = id;
+          if (cn.__setKey__ === n.__key__) {
+            n.nodes.forEach(n => n.comp = id);
+            n.comp = id;
+          }
         });
       });
       // g.forEach(d => d.compId = id);
@@ -369,9 +444,12 @@ function start() {
     return nodes;
   }
   var nodes = this.sets();
+  var clonedNodes = _.cloneDeep(this.sets());
   var links = this.links();
+  var clonedLinks = _.cloneDeep(links);
 
   this.data(runForce(nodes, links, this));
+  this._hierarchy = runTree(clonedNodes, clonedLinks);
 
   return this;
 }
@@ -456,7 +534,7 @@ function initSets(data) {
   var setData = sets.values();
 
   var {nodes, edges} = prepareGraph(this, setData);
-  console.log("EDGES", edges);
+  // console.log("EDGES", edges);
 
   this._sets = nodes;
   var linkedByIndex = {};
@@ -834,6 +912,7 @@ const d3Foci = function() {
     comps: function() {return this._comps;},
     cutEdges: function() {return this._cutEdges;},
     reducedEdges: function() {return this._reducedEdges;},
+    hierarchy: function() {return this._hierarchy;},
 
     connections: connections,
     hasConnections: hasConnections
