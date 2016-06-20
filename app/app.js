@@ -10,17 +10,18 @@ import edgeBundling from "./edgebundling.js";
 import brewer from "colorbrewer";
 
 import tagList from "./tagList.js";
-
+// bigger scale :0.0048
+//
 console.log("brewer", brewer);
 
 var o = d3.scale.ordinal()
     .domain(["foo", "bar", "baz"])
     .range(brewer.Paired[9]);
 
-var hullcolor = d3.scale.category20();
+// var hullcolor = d3.scale.category20();
 
 var hullcurve = d3.svg.line()
-  .interpolate("linear")
+  .interpolate("basis")
   .x(d => d.x)
   .y(d => d.y);
 
@@ -113,110 +114,6 @@ var collide_compose = function(nodes) {
   };
 };
 
-// var collide_rect = function(nodes) {
-//   var padding = 0;
-//   return function(alpha) {
-//     var quadtree = d3.geom.quadtree(nodes);
-//     var energy = alpha * 2;
-//       for (var i = 0, n = nodes.length; i < n; ++i) {
-//         var node = nodes[i];
-//         quadtree.visit(function(quad, x1, y1, x2, y2) {
-//           if (quad.point && (quad.point !== node) && quad.point.comp === node.comp) {
-//             var x = node.x - quad.point.x,
-//                 y = node.y - quad.point.y,
-//                 xSpacing = (quad.point.width + node.width + padding) / 2,
-//                 ySpacing = (quad.point.height + node.height + padding) / 2,
-//                 absX = Math.abs(x),
-//                 absY = Math.abs(y),
-//                 l,
-//                 lx,
-//                 ly;
-//
-//             if (absX < xSpacing && absY < ySpacing) {
-//                 l = Math.sqrt(x * x + y * y) * energy;
-//
-//                 lx = (absX - xSpacing) / l;
-//                 ly = (absY - ySpacing) / l;
-//
-//                 // the one that"s barely within the bounds probably triggered the collision
-//                 if (Math.abs(lx) > Math.abs(ly)) {
-//                         lx = 0;
-//                 } else {
-//                         ly = 0;
-//                 }
-//
-//                 node.vx -= x *= lx;
-//                 node.vy -= y *= ly;
-//                 quad.point.vx += x;
-//                 quad.point.vy += y;
-//
-//                 // updated = true;
-//             }
-//           }
-//         });
-//     }
-//      // return updated;
-//     };
-// };
-
-// function force(alpha) {
-//   for (var i = 0, n = nodes.length, node, k = alpha * 0.1; i < n; ++i) {
-//     node = nodes[i];
-//     node.vx -= node.x * k;
-//     node.vy -= node.y * k;
-//   }
-// }
-
-function rectCircleColliding(circle, rect, init){
-// var distX = Math.abs(circle.x - rect.x);
-// var distY = Math.abs(circle.y - rect.y);
-
-var center = {
-    x: circle.x - (rect.x),
-    y: circle.y - (rect.y)
-};
-
-// check circle position inside the rectangle quadrant
-var side = {
-    x: Math.abs (center.x) - rect.width / 2,
-    y: Math.abs (center.y) - rect.height / 2
-  };
-
-
-// if (side.x < circle.r && side.y < circle.r) {
-//   console.log("side", side);
-//   // return { bounce: false };
-// } // inside
-
-if (side.x > circle.r) return { bounce: false };
-if (side.y > circle.r) return { bounce: false };
-
-
-var dx = 0, dy = 0;
-if (side.x <= 0 || side.y <=0) {
-  if (Math.abs (side.x) < circle.r && side.y < 0)
-  {
-    dx = center.x*side.x < 0 ? 1 : -1;
-  }
-  else if (Math.abs (side.y) < circle.r && side.x < 0)
-  {
-    dy = center.y*side.y < 0 ? 1 : -1;
-  }
-
-  return { bounce: init, x:dx, y:dy };
-}
-
-// circle is near the corner
-var bounce = side.x*side.x + side.y*side.y  < circle.r*circle.r;
-if (!bounce) return { bounce:false };
-
-var norm = Math.sqrt (side.x*side.x+side.y*side.y);
-dx = center.x < 0 ? 1 : -1;
-dy = center.y < 0 ? 1 : -1;
-return { bounce:true, x: dx*side.x/norm, y: dy*side.y/norm };
-
-}
-
 function cropHullLabels(d, path) {
   //  var textpath = document.getElementById("tp");
   //   var path = document.getElementById("s3");
@@ -235,19 +132,7 @@ function cropHullLabels(d, path) {
   }
 }
 
-// function wrap(d) {
-//   var self = d3.select(this),
-//     textLength = self.node().getComputedTextLength(),
-//     text = self.text();
-//   while ( ( textLength > self.attr('width') )&& text.length > 0) {
-//     text = text.slice(0, -1);
-//     self.text(text + '...');
-//     textLength = self.node().getComputedTextLength();
-//   }
-// }
-
 require("./style/style.less");
-
 
 var width = 1000;//window.innerWidth;
 var height = 600;//window.innerHeight;
@@ -259,99 +144,6 @@ var viewBox = {
 
 var shiftedHeight = height + viewBox.top;
 var shiftedWidth = width + viewBox.top;
-
-function boundMargin(node, width, height, margin) {
-  var halfHeight = node.height / 2,
-      halfWidth = node.width / 2;
-
-  if (node.x - halfWidth < margin.left) {
-          node.x = halfWidth + margin.left;
-  }
-  if (node.x + halfWidth > (width - margin.right)) {
-          node.x = (width - margin.right) - halfWidth;
-  }
-
-  if (node.y - halfHeight < margin.top) {
-          node.y = halfHeight + margin.top;
-  }
-  if (node.y + halfHeight > (height - margin.top)) {
-          node.y = (height - margin.top) - halfHeight;
-  }
-  return node;
-}
-
-// function simple_comp(nodes, links) {
-//   var groups = [];
-//   var visited = {};
-//   var v;
-//
-//   // this should look like:
-//   // {
-//   //   "a2": ["a5"],
-//   //   "a3": ["a6"],
-//   //   "a4": ["a5"],
-//   //   "a5": ["a2", "a4"],
-//   //   "a6": ["a3"],
-//   //   "a7": ["a9"],
-//   //   "a9": ["a7"]
-//   // }
-//
-//   var vertices = nodes.map(d => d.index);
-//   var edgeList = links.map(l => {
-//     var edge = [l.source.index, l.target.index];
-//     return edge;
-//   });
-//   // console.log("edgeList", edgeList);
-//
-//   var adjlist = convert_edgelist_to_adjlist(vertices, edgeList);
-//
-//   for (v in adjlist) {
-//     if (adjlist.hasOwnProperty(v) && !visited[v]) {
-//       var indices = bfs(v, adjlist, visited);
-//       groups.push(indices.map(i => nodes[i]));
-//     }
-//   }
-//   return groups.map(g => g.filter(d => d));
-// }
-
-// function interCollide(node, padding, energy) {
-//     return function(quad) {
-//       var updated = false;
-//       if (quad.point && (quad.point !== node) && quad.point.comp !== node.comp && quad.point.clicked && node.clicked) {
-//         var x = node.x - quad.point.x,
-//             y = node.y - quad.point.y,
-//             xSpacing = (quad.point.width + node.width + padding) / 2,
-//             ySpacing = (quad.point.height + node.height + padding) / 2,
-//             absX = Math.abs(x),
-//             absY = Math.abs(y),
-//             l,
-//             lx,
-//             ly;
-//
-//         if (absX < xSpacing && absY < ySpacing) {
-//             l = Math.sqrt(x * x + y * y) * energy;
-//
-//             lx = (absX - xSpacing) / l;
-//             ly = (absY - ySpacing) / l;
-//
-//             // the one that"s barely within the bounds probably triggered the collision
-//             if (Math.abs(lx) > Math.abs(ly)) {
-//                     lx = 0;
-//             } else {
-//                     ly = 0;
-//             }
-//
-//             node.vx -= x *= lx;
-//             node.vy -= y *= ly;
-//             quad.point.vx += x;
-//             quad.point.vy += y;
-//
-//             updated = true;
-//         }
-//       }
-//       return updated;
-//     };
-// }
 
 function intraCollide(node, padding, energy) {
     return function(quad) {
@@ -489,14 +281,14 @@ var groupPath = function(d) {
   var labelLine = d3.svg.line()
     .x(d => d.x)
     .y(d => d.y)
-    .interpolate(offsetInterpolate(d.clicked ? 30 : 15));
+    .interpolate(offsetInterpolate(3 * 15)); // bigger: 2, 3
 
   return labelLine(hull(d.nodes).reverse());
 };
 
 
 d3.json("diigo.json", function(error, data) {
-  var diigo = data.slice(0, 300).map((d, i)=> {
+  var diigo = data.slice(0, 40).map((d, i)=> {
     d.tags = d.tags.split(",");
     d.id = i;
     return d;
@@ -513,7 +305,7 @@ d3.json("diigo.json", function(error, data) {
      .size(shiftedWidth, shiftedHeight)
      .scaleExtent([-10, 40])
      .on("zoom", () => {
-        console.log("zoom", d3.event);
+        // console.log("zoom", d3.event);
         svg.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
         var w = 1 * d3.event.scale;
         var h = 2 * d3.event.scale;
@@ -529,12 +321,15 @@ d3.json("diigo.json", function(error, data) {
         // thumb.style("height", h + "px");
      });
 
-  var svg = d3.select("body").append("svg")
+  var svg = d3.select("body")
+              .append("div")
+              .attr("class", "node-map")
+              .append("svg")
               .attr("width", width)
               .attr("height", height)
               // .attr("viewBox", 0 + " " + 200 + " " + width + " " + height)
               .attr("viewBox", (viewBox.left ) + " " + (viewBox.top ) + " " + (width - viewBox.left) + " " + (height - viewBox.top))
-              .attr("overflow", "visible")
+              // .attr("overflow", "visible")
               .append("g")
               // .attr("viewBox", (-viewBox.left ) + " " + (-viewBox.top ) + " " + (width - viewBox.left) + " " + (height - viewBox.top))
                 // .attr("transform", "translate(200, 200)")
@@ -578,8 +373,8 @@ d3.json("diigo.json", function(error, data) {
     if (d.label) return d;
     return d.nodes.map(e => {
       e.center = d.center;
-      e.width = 1;
-      e.height = 2;
+      e.width = 1 * 20; // bigger 1: 10, 20
+      e.height = 2 * 20;
       e.clicked = false;
       // e.tags = e.sets;
       return e;
@@ -587,7 +382,7 @@ d3.json("diigo.json", function(error, data) {
   }));
 
   var appliedComps = foci.comps().map(c => {
-    c.isolevel = 0.0050;
+    c.isolevel = 0.0400;
     c.sets.map(s => {
       s.values = s.values.map(on => {
         return nodes.find(n => n.id === on.id);
@@ -620,18 +415,18 @@ d3.json("diigo.json", function(error, data) {
   });
 
   var simulation = d3_force.forceSimulation(nodes)
-      // .force("charge", d3_force.forceManyBody()
-      //                    .strength(- 10)
-      //                    // .distanceMin(9)
-      //                    // .distanceMax(200)
-      // )
+      .force("charge", d3_force.forceManyBody()
+                         .strength(- 2)
+                         // .distanceMin(9)
+                         // .distanceMax(200)
+      )
       .force("x", d3_force.forceX(d => d.center.x)
         .strength(d => d.clicked ? 0 : 0.1)
       )
       .force("y", d3_force.forceY(d => d.center.y)
         .strength(d => d.clicked ? 0 : 0.1)
       )
-      .force("intraCollide", collide_compose(nodes))
+      // .force("intraCollide", collide_compose(nodes))
       // .force("interCollide", collide0(nodes));
       .alphaMin(0.3);
 
@@ -644,15 +439,20 @@ d3.json("diigo.json", function(error, data) {
   var allTags = d3.nest()
     .key(d => d.key)
     .entries(spreadNodes)
-    .map(n => {
-      var tags = _.uniq(_.flatten(n.values.map(v => v.tags)))
-        .filter(t => t !== n.key);
-      n.relatedTags = tags;
-      return n;
-    })
   .sort((a, b) => d3.descending(a.values.length, b.values.length));
 
-  console.log("allTags", allTags);
+  var tagLinks = [];
+  allTags.forEach((n, i)=> {
+    n.index = i;
+    var tags = _.uniq(_.flatten(n.values.map(v => v.tags)))
+      .filter(t => t !== n.key);
+    tags.forEach(t => {
+      if (t !== n.key) {
+        var tgtIndex = allTags.findIndex(d => d.key === t);
+        tagLinks.push({source: i, target: tgtIndex});
+      }
+    });
+  });
 
   var wordScale = d3.scale.linear()
       .domain(d3.extent(allTags, d => d.values.length))
@@ -910,40 +710,40 @@ d3.json("diigo.json", function(error, data) {
           .attr("class", "bundle-link");
     });
 
-    // marching_squares(group => {
-    //   // TODO: hull zoom
-    //   // this happens in a for loop
-    //   var backdrop = svg.select(".bubble-cont")
-    //      .selectAll(".backdrop")
-    //      .data(group.d);
-    //
-    //   // console.log("group d", group.d);
-    //         // .attr("d", function(d){ return curve(d); })
-    //   backdrop.enter()
-    //     // .insert("path", ":first-child")
-    //     .append("path")
-    //     .attr("class", "backdrop")
-    //     .attr("stroke-linejoin", "round")
-    //     .attr("opacity", 0.1);
-    //         // .attr("id", (d, i) => "co" + i)
-    //
-    //   backdrop
-    //     .attr("d", d => hullcurve(d))
-    //     .attr("fill", "grey")
-    //     .attr("stroke", "lightgrey")
-    //     .on("click", boundzoom);
-    //     // .on("click", boundzoom)
-    //     // .on("mouseover", function(d) {
-    //     //   d3.select(this).attr("opacity", 1);
-    //     //   console.log("d", d);
-    //     // })
-    //     // .on("mouseout", function() {
-    //     //   d3.select(this).attr("opacity", 0.5);
-    //     // });
-    //
-    //   backdrop.exit().remove();
-    //
-    //   }, [{values: foci.data()}], 0.005);
+    marching_squares(group => {
+      // TODO: hull zoom
+      // this happens in a for loop
+      var backdrop = svg.select(".bubble-cont")
+         .selectAll(".backdrop")
+         .data(group.d);
+
+      // console.log("group d", group.d);
+            // .attr("d", function(d){ return curve(d); })
+      backdrop.enter()
+        // .insert("path", ":first-child")
+        .append("path")
+        .attr("class", "backdrop")
+        .attr("stroke-linejoin", "round")
+        .attr("opacity", 0.1);
+            // .attr("id", (d, i) => "co" + i)
+
+      backdrop
+        .attr("d", d => hullcurve(d))
+        .attr("fill", "grey")
+        .attr("stroke", "lightgrey")
+        .on("click", boundzoom);
+        // .on("click", boundzoom)
+        // .on("mouseover", function(d) {
+        //   d3.select(this).attr("opacity", 1);
+        //   console.log("d", d);
+        // })
+        // .on("mouseout", function() {
+        //   d3.select(this).attr("opacity", 0.5);
+        // });
+
+      backdrop.exit().remove();
+
+      }, [{values: foci.data()}], 0.005);
 
 
     appliedComps.forEach((c, i) => {
@@ -960,7 +760,7 @@ d3.json("diigo.json", function(error, data) {
       //   }));
       // });
       var bufSets;
-      if (c.clicked) {
+      if (false) {
         var padding = 0;
         bufSets = c.sets.map(s => {
           return {
@@ -974,11 +774,11 @@ d3.json("diigo.json", function(error, data) {
                 {x: n.x + (n.width / 2) + padding, y: n.y},
                 {x: n.x - (n.width / 2) - padding, y: n.y},
                 // //
-                // {x: n.x + n.width / 2, y: n.y - (n.height / 2) - padding},
-                // {x: n.x + n.width / 2, y: n.y + (n.height / 2) - padding},
+                {x: n.x + n.width / 2, y: n.y - (n.height / 2) - padding},
+                {x: n.x + n.width / 2, y: n.y + (n.height / 2) - padding},
                 //
-                // {x: n.x - n.width / 2, y: n.y - (n.height / 2) - padding},
-                // {x: n.x - n.width / 2, y: n.y + (n.height / 2) - padding},
+                {x: n.x - n.width / 2, y: n.y - (n.height / 2) - padding},
+                {x: n.x - n.width / 2, y: n.y + (n.height / 2) - padding},
 
                 // {x: n.x - n.width / 4, y: n.y - n.height / 4},
                 // {x: n.x - n.width / 4, y: n.y + n.height / 4},
@@ -1022,7 +822,7 @@ d3.json("diigo.json", function(error, data) {
           });
 
         bubble.exit().remove();
-      }, bufSets, c.isolevel);
+      }, bufSets, 0.0048); // bigger: 0.0048, 0.024 (with updated bubble points)
     });
 
     // link.enter()
@@ -1118,5 +918,5 @@ d3.json("diigo.json", function(error, data) {
     // console.log("BBox", bbox, "preview", prev);
   });
   console.log("foci hierarchy", foci.hierarchy());
-  tagList(simulation, foci.hierarchy());
+  tagList(simulation, {nodes: allTags, links: tagLinks});
 });

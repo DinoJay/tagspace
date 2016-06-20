@@ -1,9 +1,11 @@
-body {
-  // overflow: hidden;
-}
-
-svg {
+@import "../../node_modules/colors.css/css/colors.css";
+// svg {
+//   float: left;
+// }
+//
+.node-map {
   float: left;
+  border: 1px solid silver;
 }
 
 .link {
@@ -12,9 +14,10 @@ svg {
   stroke-width: 1.5px;
 }
 
-.tagList {
+.tag-list {
   float: left;
-  list-style-type: none;
+  // border: 1px solid silver;
+  overflow-y: scroll;
 }
 
 li {
@@ -92,11 +95,21 @@ body {
   // overflow-x: hidden;
   // overflow-y: hidden;
 }
+
+.root {
+  cursor: pointer;
+  // fill: #fff;
+  fill-opacity: .5;
+  stroke: grey;
+  stroke-width: 1.5px;
+  position: absolute;
+}
+
 .node rect {
   cursor: pointer;
   // fill: #fff;
   fill-opacity: .5;
-  stroke: #3182bd;
+  stroke: grey;
   stroke-width: 1.5px;
 }
 
@@ -107,7 +120,6 @@ body {
 
 path.link {
   fill: none;
-  stroke: #9ecae1;
+  stroke: silver;
   stroke-width: 1.5px;
 }
-

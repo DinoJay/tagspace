@@ -4,6 +4,8 @@ import d3_force from "d3-force";
 import d3_hierarchy from "d3-hierarchy";
 
 var maxDepth = 1;
+var bigger = true;
+
 var isCutEdge = (l, nodes, linkedByIndex) => {
   var tgt = nodes[l.target];
   var targetDeg = outLinks(tgt, nodes, linkedByIndex).length;
@@ -43,11 +45,6 @@ function runTree(nodes, links) {
   }
   var linkedByIndex = {};
 
-  // var center = that._size.map(d => d/2);
-  var pack = d3_hierarchy.pack()
-      .size([300, 400])
-      // .radius(d => d.data.nodes.length * 32)
-      .padding(0);
 
   var root = {
     index:     nodes.length,
@@ -109,13 +106,15 @@ var collide = function(nodes) {
     var quadtree = d3.geom.quadtree(nodes);
       for (var i = 0, n = nodes.length; i < n; ++i) {
         var d = nodes[i];
-        d.r = 40;
+        // TODO: adopt to size of diigo
+        d.r = bigger ? 50 * 1.7 : 50;
         var nx1 = d.x - d.r,
           nx2 = d.x + d.r,
           ny1 = d.y - d.r,
           ny2 = d.y + d.r;
         quadtree.visit(function(quad, x1, y1, x2, y2) {
-          if (quad.point && (quad.point !== d) && quad.point.comp !== d.comp && !d.label && !quad.point.label) {
+          if (quad.point && (quad.point !== d)
+            && quad.point.comp !== d.comp && !d.label && !quad.point.label) {
             // console.log("quad.point", quad.point.comp, d.comp)
             var x = d.x - quad.point.x,
                 y = d.y - quad.point.y,
@@ -342,13 +341,14 @@ function start() {
 
     var simulation = d3_force.forceSimulation(nodes)
       .force("charge", d3_force.forceManyBody()
-                         .strength(- 40)
+                          // scale: 40, 40 * 3,
+                         .strength(bigger ? - 40 * 5 : 40)
                          // .distanceMin(9)
-                         .distanceMax(200)
+                         .distanceMax(300)
       )
       // TODO: encapsulate in function
       .force("link", d3_force.forceLink()
-               .distance(l => l.target.label ? 1 : l.cut ? 100 : 9)
+               .distance(l => l.target.label ? 1 : l.cut ? 100 : bigger ? 10 * 5 : 9)
                .strength(l => {
                  var def = 1 / Math.min(l.source.outLinks.length, l.target.outLinks.length);
                  return l.cut ? def : 1;
