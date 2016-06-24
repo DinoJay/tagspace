@@ -10,6 +10,7 @@ import edgeBundling from "./edgebundling.js";
 import brewer from "colorbrewer";
 
 import tagList from "./tagList.js";
+import tagStream from "./tagStream.js";
 // bigger scale :0.0048
 //
 console.log("brewer", brewer);
@@ -288,7 +289,7 @@ var groupPath = function(d) {
 
 
 d3.json("diigo.json", function(error, data) {
-  var diigo = data.slice(0, 40).map((d, i)=> {
+  var diigo = data.slice(0, 300).map((d, i)=> {
     d.tags = d.tags.split(",");
     d.id = i;
     return d;
@@ -441,18 +442,18 @@ d3.json("diigo.json", function(error, data) {
     .entries(spreadNodes)
   .sort((a, b) => d3.descending(a.values.length, b.values.length));
 
-  var tagLinks = [];
-  allTags.forEach((n, i)=> {
-    n.index = i;
-    var tags = _.uniq(_.flatten(n.values.map(v => v.tags)))
-      .filter(t => t !== n.key);
-    tags.forEach(t => {
-      if (t !== n.key) {
-        var tgtIndex = allTags.findIndex(d => d.key === t);
-        tagLinks.push({source: i, target: tgtIndex});
-      }
-    });
-  });
+  // var tagLinks = [];
+  // allTags.forEach((n, i)=> {
+  //   n.index = i;
+  //   var tags = _.uniq(_.flatten(n.values.map(v => v.tags)))
+  //     .filter(t => t !== n.key);
+  //   tags.forEach(t => {
+  //     if (t !== n.key) {
+  //       var tgtIndex = allTags.findIndex(d => d.key === t);
+  //       tagLinks.push({source: i, target: tgtIndex});
+  //     }
+  //   });
+  // });
 
   var wordScale = d3.scale.linear()
       .domain(d3.extent(allTags, d => d.values.length))
@@ -917,6 +918,12 @@ d3.json("diigo.json", function(error, data) {
 
     // console.log("BBox", bbox, "preview", prev);
   });
-  console.log("foci hierarchy", foci.hierarchy());
-  tagList(simulation, {nodes: allTags, links: tagLinks});
+
+  var tagCont = d3.select("body")
+    .append("div")
+    .style("height", "600px")
+    .attr("class", "tag-list");
+  // tagList(allTags, tagCont);
+  tagStream(spreadNodes.filter(d => !d.label), tagCont);
+
 });

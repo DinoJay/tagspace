@@ -31,6 +31,7 @@
     "d3-force": "^0.6.3",
     "d3-hierarchy": "^0.2.1",
     "d3-measure-text": "0.0.2",
+    "d3.layout.cloud": "^1.2.0",
     "flip-text": "^1.1.0",
     "jquery": "^2.2.0",
     "js-clipper": "^1.0.1",

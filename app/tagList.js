@@ -119,8 +119,7 @@ function reinsert(cur, key, children, nodeMap) {
 }
 
 
-function tagList(sim, tagGraph) {
-  var {nodes, links} = tagGraph;
+function tagList(nodes, cont) {
   var allTags = nodes.map(n => n.key);
 
   nodes.forEach(n => {
@@ -171,11 +170,11 @@ function tagList(sim, tagGraph) {
 
   var duration = 400;
 
-  var cont = d3.select("body")
-    .append("div")
-    // TODO: make dynamic
-    .style("height", "600px")
-    .attr("class", "tag-list");
+  // TODO: make dynamic
+  // var cont = d3.select("body")
+  //   .append("div")
+  //   .style("height", "600px")
+  //   .attr("class", "tag-list");
 
   var svg = cont.append("svg");
 
