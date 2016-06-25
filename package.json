@@ -27,21 +27,14 @@
   "dependencies": {
     "colorbrewer": "^1.0.0",
     "connected-components": "^1.0.0",
-    "d3": "^3.5.16",
-    "d3-force": "^0.6.3",
-    "d3-hierarchy": "^0.2.1",
-    "d3-measure-text": "0.0.2",
-    "d3.layout.cloud": "^1.2.0",
-    "flip-text": "^1.1.0",
+    "d3": "^3.5.17",
+    "d3-axis": "^1.0.0",
+    "d3-force": "^1.0.0",
+    "d3-hierarchy": "^1.0.0",
+    "d3-scale": "^1.0.0",
+    "d3-time-format": "^2.0.0",
     "jquery": "^2.2.0",
-    "js-clipper": "^1.0.1",
-    "lineclip": "^1.1.5",
-    "lodash": "^4.0.1",
-    "raphael": "^2.2.0",
-    "simplify-js": "^1.2.1",
-    "snapsvg": "^0.4.0",
-    "svg-path-parser": "^1.0.1",
-    "webcola": "git://github.com/tgdwyer/WebCola#master"
+    "lodash": "^4.0.1"
   },
   "devDependencies": {
     "babel-core": "^6.4.5",

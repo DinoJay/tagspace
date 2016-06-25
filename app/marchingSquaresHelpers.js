@@ -1,13 +1,13 @@
 import _ from "lodash";
-import d3 from "d3";
+import d3_old from "d3";
 
-// var color = d3.scale.category20();
+// var color = d3_old.scale.category20();
 
 
 
-// var hullcolor = d3.scale.category20();
+// var hullcolor = d3_old.scale.category20();
 //
-// var hullcurve = d3.svg.line()
+// var hullcurve = d3_old.svg.line()
 //   .interpolate("basis-closed")
 //   .x(d => d.x)
 //   .y(d => d.y);
@@ -191,7 +191,7 @@ function draw_marching_squares(callback, groups, isolevel = 0.0500,
           //   tetriscells.push({
           //     x: cell.x,
           //     y: cell.y,
-          //     val: d3.median(cell.val)
+          //     val: d3_old.median(cell.val)
           //   });
           // }
 
@@ -214,13 +214,13 @@ function draw_marching_squares(callback, groups, isolevel = 0.0500,
           tetriscells.push({
             x: cell.x,
             y: cell.y,
-            val: d3.median(cell.val)
+            val: d3_old.median(cell.val)
           });
         }
       } // j
     } // i
 
-    var opacityExtent = d3.extent(tetriscells.map(function(d) {
+    var opacityExtent = d3_old.extent(tetriscells.map(function(d) {
       return d.val;
     }));
 
@@ -233,7 +233,7 @@ function draw_marching_squares(callback, groups, isolevel = 0.0500,
       tetrisOpacityRange = [0, 0];
     }
 
-    tetrisOpacityMap = d3.scale.linear()
+    tetrisOpacityMap = d3_old.scale.linear()
       .domain(opacityExtent)
       .range(tetrisOpacityRange);
 
@@ -245,10 +245,10 @@ function draw_marching_squares(callback, groups, isolevel = 0.0500,
 
     g.d = arrayOfArrays;
     callback(g);
-    // d3.select(".bubble-cont").selectAll(".bubble-"+g.key).remove();
+    // d3_old.select(".bubble-cont").selectAll(".bubble-"+g.key).remove();
 
     // // TODO: no hover possible
-    // d3.select(".bubble-cont")
+    // d3_old.select(".bubble-cont")
     //  .selectAll(".bubble-"+g.key)
     //   .data(arrayOfArrays)
     //   .enter()

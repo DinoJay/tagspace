@@ -1,7 +1,7 @@
 import d3 from "d3";
 import _ from "lodash";
-import d3_force from "d3-force";
-import d3_hierarchy from "d3-hierarchy";
+import * as d3_force from "d3-force";
+console.log("d3_force", d3_force);
 
 var maxDepth = 1;
 var bigger = true;

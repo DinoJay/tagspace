@@ -1,11 +1,11 @@
-import d3 from "d3";
-import d3_hierarchy from "d3";
+import * as d3 from "d3";
+// import d3 from "d3";
 import _ from "lodash";
 
-var line = d3.svg.line()
-  .interpolate("basis")
-  .x(d => d.y)
-  .y(d => d.x);
+// var line = d3.line()
+//   .interpolate("basis")
+//   .x(d => d.y)
+//   .y(d => d.x);
 
 var stepLine = d3.svg.line().interpolate("step-before")
         .x(d => d.x)
@@ -191,7 +191,7 @@ function tagList(nodes, cont) {
     update(root);
 
   function update(source) {
-    var tree = d3_hierarchy.layout.tree()
+    var tree = d3.layout.tree()
         .nodeSize([0, 30]);
     // Compute the flattened node list. TODO use d3.layout.hierarchy.
     var treeNodes = tree.nodes(source);//_.orderBy(tree.nodes(source), d => d.values.length, "desc");

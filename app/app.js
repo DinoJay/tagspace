@@ -1,7 +1,7 @@
-import d3 from "d3";
+import d3_old from "d3";
 import _ from "lodash";
 import fociLayout from "./foci";
-import d3_force from "d3-force";
+import * as d3_force from "d3-force";
 
 import marching_squares from "./marchingSquaresHelpers.js";
 import offsetInterpolate from "./polyOffset.js";
@@ -15,18 +15,18 @@ import tagStream from "./tagStream.js";
 //
 console.log("brewer", brewer);
 
-var o = d3.scale.ordinal()
+var o = d3_old.scale.ordinal()
     .domain(["foo", "bar", "baz"])
     .range(brewer.Paired[9]);
 
-// var hullcolor = d3.scale.category20();
+// var hullcolor = d3_old.scale.category20();
 
-var hullcurve = d3.svg.line()
+var hullcurve = d3_old.svg.line()
   .interpolate("basis")
   .x(d => d.x)
   .y(d => d.y);
 
-var bundleLine = d3.svg.line()
+var bundleLine = d3_old.svg.line()
             .x(d => d.x)
             .y(d => d.y)
             .interpolate("monotone");
@@ -73,7 +73,7 @@ function collide(node, energy) {
 
 var collide0 = function(nodes) {
   return function(alpha) {
-    var quadtree = d3.geom.quadtree(nodes);
+    var quadtree = d3_old.geom.quadtree(nodes);
       for (var i = 0, n = nodes.length; i < n; ++i) {
         var d = nodes[i];
         d.r = 50;
@@ -104,7 +104,7 @@ var collide0 = function(nodes) {
 };
 
 var collide_compose = function(nodes) {
-  var q = d3.geom.quadtree(nodes);
+  var q = d3_old.geom.quadtree(nodes);
   return function(alpha) {
     for (var i = 0, n = nodes.length; i < n; ++i) {
     // while (++i < n) {
@@ -118,15 +118,15 @@ var collide_compose = function(nodes) {
 function cropHullLabels(d, path) {
   //  var textpath = document.getElementById("tp");
   //   var path = document.getElementById("s3");
-  while ((d3.select("#tp-hull" + d.id).node().getComputedTextLength() * 1.1) > path.node().getTotalLength()) {
+  while ((d3_old.select("#tp-hull" + d.id).node().getComputedTextLength() * 1.1) > path.node().getTotalLength()) {
     // TODO: remove last element
-    var tspan = d3.select("#tp-hull" + d.id).selectAll("tspan");
+    var tspan = d3_old.select("#tp-hull" + d.id).selectAll("tspan");
     var minTag = _.minBy(tspan.data(), d => d.values.length);
 
     tspan.filter(d => d.key === minTag.key).remove();
 
     // .attr("font-size", function() {
-    //   var fontsize = d3.select(this).attr("font-size");
+    //   var fontsize = d3_old.select(this).attr("font-size");
     //   fontsize -= 0.01;
     //   return fontsize;
     // });
@@ -203,7 +203,7 @@ function nbsDirected(a, linkedByIndex) {
 
 
 function collideCircle(data, alpha, padding) {
-  var quadtree = d3.geom.quadtree(data);
+  var quadtree = d3_old.geom.quadtree(data);
   return function(d) {
       var r = d.r + padding,
           nx1 = d.x - r,
@@ -231,9 +231,9 @@ function collideCircle(data, alpha, padding) {
 }
 
 
-var fill = d3.scale.category10();
+var fill = d3_old.scale.category10();
 
-// d3.select("body").append("div")
+// d3_old.select("body").append("div")
 //   .on("click", () => console.log("it works with es6!"))
 //   .text("it works!");
 
@@ -272,14 +272,14 @@ var convert_edgelist_to_adjlist = function(vertices, edgelist) {
 var groupPath = function(d) {
   if (d.nodes.length < 2) return null;
 
-  var hull = d3.geom.hull()
+  var hull = d3_old.geom.hull()
     .x(function(d) {
     return d.x;
   }).y(function(d) {
     return d.y;
   });
 
-  var labelLine = d3.svg.line()
+  var labelLine = d3_old.svg.line()
     .x(d => d.x)
     .y(d => d.y)
     .interpolate(offsetInterpolate(3 * 15)); // bigger: 2, 3
@@ -288,7 +288,7 @@ var groupPath = function(d) {
 };
 
 
-d3.json("diigo.json", function(error, data) {
+d3_old.json("diigo.json", function(error, data) {
   var diigo = data.slice(0, 300).map((d, i)=> {
     d.tags = d.tags.split(",");
     d.id = i;
@@ -302,14 +302,14 @@ d3.json("diigo.json", function(error, data) {
   //d
   // data.documents.forEach(d => d.r = 12);
 
-  var zoom = d3.behavior.zoom()
+  var zoom = d3_old.behavior.zoom()
      .size(shiftedWidth, shiftedHeight)
      .scaleExtent([-10, 40])
      .on("zoom", () => {
-        // console.log("zoom", d3.event);
-        svg.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
-        var w = 1 * d3.event.scale;
-        var h = 2 * d3.event.scale;
+        // console.log("zoom", d3_old.event);
+        svg.attr("transform", "translate(" + d3_old.event.translate + ")scale(" + d3_old.event.scale + ")");
+        var w = 1 * d3_old.event.scale;
+        var h = 2 * d3_old.event.scale;
         thumb
           .style("width", w + "px")
           .style("height", h + "px");
@@ -322,7 +322,7 @@ d3.json("diigo.json", function(error, data) {
         // thumb.style("height", h + "px");
      });
 
-  var svg = d3.select("body")
+  var svg = d3_old.select("body")
               .append("div")
               .attr("class", "node-map")
               .append("svg")
@@ -347,7 +347,7 @@ d3.json("diigo.json", function(error, data) {
         .style("fill", "none");
             //make transparent (vs black if commented-out)
   // svg.attr("transform", "scale(0.5)");
-  // var elmnt = d3.select("svg").node();
+  // var elmnt = d3_old.select("svg").node();
 
   // window.scrollTo(overflow.left, overflow.top ) ;
 
@@ -437,10 +437,10 @@ d3.json("diigo.json", function(error, data) {
     return copy;
   })));
 
-  var allTags = d3.nest()
+  var allTags = d3_old.nest()
     .key(d => d.key)
     .entries(spreadNodes)
-  .sort((a, b) => d3.descending(a.values.length, b.values.length));
+  .sort((a, b) => d3_old.descending(a.values.length, b.values.length));
 
   // var tagLinks = [];
   // allTags.forEach((n, i)=> {
@@ -455,8 +455,8 @@ d3.json("diigo.json", function(error, data) {
   //   });
   // });
 
-  var wordScale = d3.scale.linear()
-      .domain(d3.extent(allTags, d => d.values.length))
+  var wordScale = d3_old.scale.linear()
+      .domain(d3_old.extent(allTags, d => d.values.length))
       .rangeRound([7, 50]);
 
   var boundzoom = function(d) {
@@ -469,7 +469,7 @@ d3.json("diigo.json", function(error, data) {
       scale = Math.max(1, Math.min(8, 0.9 / Math.max(dx / width, dy / height))),
       translate = [width / 2 - scale * x, (height + viewBox.top) / 2 - scale * y];
 
-    // d3.select(this).attr("stroke", 0);
+    // d3_old.select(this).attr("stroke", 0);
     // console.log("hull", d);
     // var hullDocs = doc.filter(e => d.nodes.find(n => n.id === e.id));
     // console.log("hullDocs", hullDocs);
@@ -522,7 +522,7 @@ d3.json("diigo.json", function(error, data) {
     .enter()
     .append("tspan")
     .attr("font-size", function(d) {
-      // var wordScale = d3.select(this.parentNode).datum().scale;
+      // var wordScale = d3_old.select(this.parentNode).datum().scale;
       return wordScale(d.values.length);
     })
   .text(d => d.key+ " · ")
@@ -546,7 +546,7 @@ d3.json("diigo.json", function(error, data) {
         // d.isolevel = 0.0120;
         d.isolevel = 0.0020;
         var ids = d.nodes.map(d => d.id);
-        var hullNodes = d3.selectAll(".doc")
+        var hullNodes = d3_old.selectAll(".doc")
           .filter(e => ids.indexOf(e.id) !== -1);
 
         console.log("hullNodes", hullNodes);
@@ -624,10 +624,10 @@ d3.json("diigo.json", function(error, data) {
     d.width = this.getBBox().width;
     d.height = this.getBBox().height;
 
-    d3.select(this).select("text")
+    d3_old.select(this).select("text")
       .attr("dy", d.height);
 
-    d3.select(this)
+    d3_old.select(this)
       .insert("rect", ":first-child")
       .attr("fill", "none")
       .attr("width", d.width)
@@ -657,7 +657,7 @@ d3.json("diigo.json", function(error, data) {
 
   simulation.on("end", function() {
     hull.each(function(d) {
-      cropHullLabels(d, d3.select(this));
+      cropHullLabels(d, d3_old.select(this));
     });
 
     var deepLinks = _.flattenDeep(foci._cutEdges.map(e => {
@@ -735,11 +735,11 @@ d3.json("diigo.json", function(error, data) {
         .on("click", boundzoom);
         // .on("click", boundzoom)
         // .on("mouseover", function(d) {
-        //   d3.select(this).attr("opacity", 1);
+        //   d3_old.select(this).attr("opacity", 1);
         //   console.log("d", d);
         // })
         // .on("mouseout", function() {
-        //   d3.select(this).attr("opacity", 0.5);
+        //   d3_old.select(this).attr("opacity", 0.5);
         // });
 
       backdrop.exit().remove();
@@ -815,11 +815,11 @@ d3.json("diigo.json", function(error, data) {
           .attr("fill", o(group.key))
           .on("click", boundzoom)
           .on("mouseover", function(d) {
-            d3.select(this).attr("opacity", 1);
+            d3_old.select(this).attr("opacity", 1);
             console.log("d", d);
           })
           .on("mouseout", function() {
-            d3.select(this).attr("opacity", 0.5);
+            d3_old.select(this).attr("opacity", 0.5);
           });
 
         bubble.exit().remove();
@@ -841,7 +841,7 @@ d3.json("diigo.json", function(error, data) {
 
   simulation.on("tick", function() {
 
-    // var q2 = d3.geom.quadtree(nodes);
+    // var q2 = d3_old.geom.quadtree(nodes);
     // nodes.forEach(d => {
     //   if (d.clicked){
     //     // q2.visit(interCollide(d, 75, 8));
@@ -858,7 +858,7 @@ d3.json("diigo.json", function(error, data) {
     hull.attr("d", groupPath);
 
     hull.each(function(d) {
-      cropHullLabels(d, d3.select(this));
+      cropHullLabels(d, d3_old.select(this));
     });
 
     doc
@@ -892,15 +892,15 @@ d3.json("diigo.json", function(error, data) {
     // rectBox.width = 80;
     // rectBox.height = 80;
 
-    // var thumbNail = d3.select(this).select("foreignObject div");
-    // var iframe = d3.select(this).select("foreignObject div iframe");
+    // var thumbNail = d3_old.select(this).select("foreignObject div");
+    // var iframe = d3_old.select(this).select("foreignObject div iframe");
     // console.log("iframe", iframe, "sibling", prev);
     // iframe.attr("src", "http://starkravingfinkle.org/blog");
 
     // iframe.style("width", w + "px");
     // iframe.style("height", h + "px");
 
-    // var preview = d3.select(this)
+    // var preview = d3_old.select(this)
     //   .insert("foreignObject", ":first-child")
     //     .attr("transform", null)
     //     .attr("width", d.width)
@@ -919,7 +919,7 @@ d3.json("diigo.json", function(error, data) {
     // console.log("BBox", bbox, "preview", prev);
   });
 
-  var tagCont = d3.select("body")
+  var tagCont = d3_old.select("body")
     .append("div")
     .style("height", "600px")
     .attr("class", "tag-list");
