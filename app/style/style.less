@@ -105,13 +105,6 @@ body {
   position: absolute;
 }
 
-.axis path, .axis line {
-  fill: none;
-  stroke: #000;
-  stroke-width: 2px;
-  shape-rendering: crispEdges;
-}
-
 .node rect {
   cursor: pointer;
   // fill: #fff;
@@ -129,4 +122,19 @@ path.link {
   fill: none;
   stroke: silver;
   stroke-width: 1.5px;
+}
+
+.axis {
+  font: 10px sans-serif;
+}
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+.axis--x path {
+  display: none;
 }

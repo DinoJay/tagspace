@@ -20,9 +20,6 @@ var height = 1000,
 var margin = {left: 100, top: 0};
 
 
-// var wordScale = d3_old.scale.linear()
-//     .domain(d3_old.extent(allTags, d => d.values.length))
-//     .rangeRound([7, 50]);
 
 function rectCollide(nodes) {
   return function(alpha) {
@@ -102,7 +99,7 @@ function prepareData(rawData) {
   });
 
   // return {groups: nested, data: _.flatten(layers.map(l => l.values))};
-  return {groups: nested, data: nested.reduce((acc, g) => acc.concat(g.values), [])};
+  return {groups: nested, tags: nested.reduce((acc, g) => acc.concat(g.values), [])};
 }
 
 var dbg = d => {
@@ -117,8 +114,12 @@ function tagStream(spreadDocs, cont) {
   console.log("spreadDocs", spreadDocs);
   // TODO: FIX cleaning
 
-  var {groups, data} = prepareData(spreadDocs);
-  console.log("data", data);
+  var {groups, tags} = prepareData(spreadDocs);
+  console.log("tags", tags);
+
+  var wordScale = d3_old.scale.linear()
+      .domain(d3_old.extent(tags, d => d.size))
+      .rangeRound([7, 50]);
 
   var x = d3_old.scale.linear().range([0, 600])
             .domain([0, d3_old.max(groups, d => d.values.length)]);
@@ -159,7 +160,7 @@ function tagStream(spreadDocs, cont) {
       .call(yAxis);
 
   var gEnter = gSub.selectAll(".rect")
-    .data(data)
+    .data(tags)
     .enter();
 
   var gWord = gEnter.append("g");
@@ -171,7 +172,7 @@ function tagStream(spreadDocs, cont) {
 
   var text = gWord.append("text")
     .text(d => d.key)
-    .style("font-size", d => d.size + "px")
+    .style("font-size", d => wordScale(d.size) + "px")
     .each(function(d) {
       var self = d3_old.select(this);
       var bbox = self.node().getBBox();
@@ -187,7 +188,7 @@ function tagStream(spreadDocs, cont) {
     .style("opacity", 0.3);
 
   // gSub.selectAll("circle")
-  //   .data(data)
+  //   .data(tags)
   //   .enter()
   //   .append("circle")
   //     .attr("r", 3)
@@ -195,13 +196,13 @@ function tagStream(spreadDocs, cont) {
   //     .attr("cy", d => d.y)
   //     .on("click", d => console.log("d.date", d.date));
 
-  var simulation = d3_force.forceSimulation(data)
+  var simulation = d3_force.forceSimulation(tags)
         // .force("y", d3_old.forceY(height / 2))
         .force("y", d3_force.forceY(d => y(d.date)).strength(0.1))
         // .force("x", d3_force.forceX(width / 2).strength(0.2))
         // .force("center", d3_force.forceCenter().x(width/2))
         // .force("collide", d3_force.forceCollide(4))
-        .force("collide", rectCollide(data))
+        .force("collide", rectCollide(tags))
         // .stop()
         .on("tick", () => {
           rect

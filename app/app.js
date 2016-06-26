@@ -289,7 +289,7 @@ var groupPath = function(d) {
 
 
 d3_old.json("diigo.json", function(error, data) {
-  var diigo = data.slice(0, 300).map((d, i)=> {
+  var diigo = data.slice(0, 100).map((d, i)=> {
     d.tags = d.tags.split(",");
     d.id = i;
     return d;
