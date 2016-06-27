@@ -27,7 +27,7 @@
   "dependencies": {
     "colorbrewer": "^1.0.0",
     "connected-components": "^1.0.0",
-    "d3": "^3.5.17",
+    "d3": "^4.0.0-rc.2",
     "d3-axis": "^1.0.0",
     "d3-force": "^1.0.0",
     "d3-hierarchy": "^1.0.0",

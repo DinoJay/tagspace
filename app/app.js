@@ -1,4 +1,5 @@
-import d3_old from "d3";
+// import d3 from "d3";
+import * as d3 from "d3";
 import _ from "lodash";
 import fociLayout from "./foci";
 import * as d3_force from "d3-force";
@@ -15,118 +16,118 @@ import tagStream from "./tagStream.js";
 //
 console.log("brewer", brewer);
 
-var o = d3_old.scale.ordinal()
+var o = d3.scaleOrdinal()
     .domain(["foo", "bar", "baz"])
     .range(brewer.Paired[9]);
 
-// var hullcolor = d3_old.scale.category20();
+// var hullcolor = d3.scale.category20();
 
-var hullcurve = d3_old.svg.line()
-  .interpolate("basis")
+var hullcurve = d3.line()
+  .curve(d3.curveBasisOpen)
   .x(d => d.x)
   .y(d => d.y);
 
-var bundleLine = d3_old.svg.line()
+var bundleLine = d3.line()
             .x(d => d.x)
             .y(d => d.y)
-            .interpolate("monotone");
+            .curve(d3.curveBundle);
 
-function collide(node, energy) {
-  return function(quad, x1, y1, x2, y2) {
-    var updated = false;
-    if (quad.point && (quad.point !== node)) {
+// function collide(node, energy) {
+//   return function(quad, x1, y1, x2, y2) {
+//     var updated = false;
+//     if (quad.point && (quad.point !== node)) {
+//
+//       var x = node.x - quad.point.x,
+//         y = node.y - quad.point.y,
+//         xSpacing = (quad.point.width + node.width) / 2,
+//         ySpacing = (quad.point.height + node.height) / 2,
+//         absX = Math.abs(x),
+//         absY = Math.abs(y),
+//         l,
+//         lx,
+//         ly;
+//
+//       if (absX < xSpacing && absY < ySpacing) {
+//         l = Math.sqrt(x * x + y * y);
+//
+//         lx = (absX - xSpacing) / l;
+//         ly = (absY - ySpacing) / l;
+//
+//         // the one that's barely within the bounds probably triggered the collision
+//         if (Math.abs(lx) > Math.abs(ly)) {
+//           lx = 0;
+//         } else {
+//           ly = 0;
+//         }
+//
+//         node.vx -= x *= lx;
+//         node.vy -= y *= ly;
+//         quad.point.vx += x;
+//         quad.point.vy += y;
+//
+//         updated = true;
+//       }
+//     }
+//     return updated;
+//   };
+// }
 
-      var x = node.x - quad.point.x,
-        y = node.y - quad.point.y,
-        xSpacing = (quad.point.width + node.width) / 2,
-        ySpacing = (quad.point.height + node.height) / 2,
-        absX = Math.abs(x),
-        absY = Math.abs(y),
-        l,
-        lx,
-        ly;
+// var collide0 = function(nodes) {
+//   return function(alpha) {
+//     var quadtree = d3.geom.quadtree(nodes);
+//       for (var i = 0, n = nodes.length; i < n; ++i) {
+//         var d = nodes[i];
+//         d.r = 50;
+//         var nx1 = d.x - d.r,
+//           nx2 = d.x + d.r,
+//           ny1 = d.y - d.r,
+//           ny2 = d.y + d.r;
+//         quadtree.visit(function(quad, x1, y1, x2, y2) {
+//           if (quad.point && (quad.point !== d) && quad.point.comp !== d.comp && quad.point.clicked && d.clicked) {
+//             // console.log("quad.point", quad.point.comp, d.comp);
+//             var x = d.x - quad.point.x,
+//                 y = d.y - quad.point.y,
+//                 l = Math.sqrt(x * x + y * y),
+//                 r = d.r + quad.point.r;
+//
+//             if (l < r) {
+//               l = (l - r) / l * alpha;
+//               d.x -= x *= l;
+//               d.y -= y *= l;
+//               quad.point.x += x;
+//               quad.point.y += y;
+//             }
+//           }
+//           return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
+//         });
+//       }
+//     };
+// };
 
-      if (absX < xSpacing && absY < ySpacing) {
-        l = Math.sqrt(x * x + y * y);
-
-        lx = (absX - xSpacing) / l;
-        ly = (absY - ySpacing) / l;
-
-        // the one that's barely within the bounds probably triggered the collision
-        if (Math.abs(lx) > Math.abs(ly)) {
-          lx = 0;
-        } else {
-          ly = 0;
-        }
-
-        node.vx -= x *= lx;
-        node.vy -= y *= ly;
-        quad.point.vx += x;
-        quad.point.vy += y;
-
-        updated = true;
-      }
-    }
-    return updated;
-  };
-}
-
-var collide0 = function(nodes) {
-  return function(alpha) {
-    var quadtree = d3_old.geom.quadtree(nodes);
-      for (var i = 0, n = nodes.length; i < n; ++i) {
-        var d = nodes[i];
-        d.r = 50;
-        var nx1 = d.x - d.r,
-          nx2 = d.x + d.r,
-          ny1 = d.y - d.r,
-          ny2 = d.y + d.r;
-        quadtree.visit(function(quad, x1, y1, x2, y2) {
-          if (quad.point && (quad.point !== d) && quad.point.comp !== d.comp && quad.point.clicked && d.clicked) {
-            // console.log("quad.point", quad.point.comp, d.comp);
-            var x = d.x - quad.point.x,
-                y = d.y - quad.point.y,
-                l = Math.sqrt(x * x + y * y),
-                r = d.r + quad.point.r;
-
-            if (l < r) {
-              l = (l - r) / l * alpha;
-              d.x -= x *= l;
-              d.y -= y *= l;
-              quad.point.x += x;
-              quad.point.y += y;
-            }
-          }
-          return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
-        });
-      }
-    };
-};
-
-var collide_compose = function(nodes) {
-  var q = d3_old.geom.quadtree(nodes);
-  return function(alpha) {
-    for (var i = 0, n = nodes.length; i < n; ++i) {
-    // while (++i < n) {
-            // console.log("alpha", alpha);
-            q.visit(collide(nodes[i]), alpha);
-            // checkBounds(nodes[i]);
-    }
-  };
-};
+// var collide_compose = function(nodes) {
+//   var q = d3.geom.quadtree(nodes);
+//   return function(alpha) {
+//     for (var i = 0, n = nodes.length; i < n; ++i) {
+//     // while (++i < n) {
+//             // console.log("alpha", alpha);
+//             q.visit(collide(nodes[i]), alpha);
+//             // checkBounds(nodes[i]);
+//     }
+//   };
+// };
 
 function cropHullLabels(d, path) {
   //  var textpath = document.getElementById("tp");
   //   var path = document.getElementById("s3");
-  while ((d3_old.select("#tp-hull" + d.id).node().getComputedTextLength() * 1.1) > path.node().getTotalLength()) {
+  while ((d3.select("#tp-hull" + d.id).node().getComputedTextLength() * 1.1) > path.node().getTotalLength()) {
     // TODO: remove last element
-    var tspan = d3_old.select("#tp-hull" + d.id).selectAll("tspan");
+    var tspan = d3.select("#tp-hull" + d.id).selectAll("tspan");
     var minTag = _.minBy(tspan.data(), d => d.values.length);
 
     tspan.filter(d => d.key === minTag.key).remove();
 
     // .attr("font-size", function() {
-    //   var fontsize = d3_old.select(this).attr("font-size");
+    //   var fontsize = d3.select(this).attr("font-size");
     //   fontsize -= 0.01;
     //   return fontsize;
     // });
@@ -136,104 +137,103 @@ function cropHullLabels(d, path) {
 require("./style/style.less");
 
 var width = 1000;//window.innerWidth;
-var height = 600;//window.innerHeight;
+var height = 400;//window.innerHeight;
 
 var viewBox = {
   left: 0,
-  top: 500
+  top: 300
 };
 
 var shiftedHeight = height + viewBox.top;
 var shiftedWidth = width + viewBox.top;
 
-function intraCollide(node, padding, energy) {
-    return function(quad) {
-      var updated = false;
-      if (quad.point && (quad.point !== node) && quad.point.comp === node.comp) {
-        var x = node.x - quad.point.x,
-            y = node.y - quad.point.y,
-            xSpacing = (quad.point.width + (node.width) + padding) / 2,
-            ySpacing = (quad.point.height + (node.height) + padding) / 2,
-            absX = Math.abs(x),
-            absY = Math.abs(y),
-            l,
-            lx,
-            ly;
+// function intraCollide(node, padding, energy) {
+//     return function(quad) {
+//       var updated = false;
+//       if (quad.point && (quad.point !== node) && quad.point.comp === node.comp) {
+//         var x = node.x - quad.point.x,
+//             y = node.y - quad.point.y,
+//             xSpacing = (quad.point.width + (node.width) + padding) / 2,
+//             ySpacing = (quad.point.height + (node.height) + padding) / 2,
+//             absX = Math.abs(x),
+//             absY = Math.abs(y),
+//             l,
+//             lx,
+//             ly;
+//
+//         if (absX < xSpacing && absY < ySpacing) {
+//             l = Math.sqrt(x * x + y * y) * energy;
+//
+//             lx = (absX - xSpacing) / l;
+//             ly = (absY - ySpacing) / l;
+//
+//             // the one that"s barely within the bounds probably triggered the collision
+//             if (Math.abs(lx) > Math.abs(ly)) {
+//                     lx = 0;
+//             } else {
+//                     ly = 0;
+//             }
+//
+//             node.x -= x *= lx;
+//             node.y -= y *= ly;
+//             quad.point.x += x;
+//             quad.point.y += y;
+//
+//             updated = true;
+//         }
+//       }
+//       return updated;
+//     };
+// }
+//
+// function nbsDirected(a, linkedByIndex) {
+//   var nbs = [];
+//   for (var property in linkedByIndex) {
+//     var s = property.split(",").map(d => parseInt(d));
+//     // if (s[0] === a) {
+//     //   nbs.push(s[1]);
+//     // }
+//     // else {
+//       if (s[1] === a) {
+//         nbs.push(s[0]);
+//       }
+//     // }
+//   }
+//   return _.uniq(nbs);
+// }
+//
+// function collideCircle(data, alpha, padding) {
+//   var quadtree = d3.geom.quadtree(data);
+//   return function(d) {
+//       var r = d.r + padding,
+//           nx1 = d.x - r,
+//           nx2 = d.x + r,
+//           ny1 = d.y - r,
+//           ny2 = d.y + r;
+//       quadtree.visit(function(quad, x1, y1, x2, y2) {
+//         if (quad.point && (quad.point !== d)) {
+//           var x = d.x - quad.point.x,
+//               y = d.y - quad.point.y,
+//               l = Math.sqrt(x * x + y * y),
+//               r = d.r + padding + quad.point.r;
+//
+//           if (l < r) {
+//             l = (l - r) / l * alpha;
+//             d.x -= x *= l;
+//             d.y -= y *= l;
+//             quad.point.x += x;
+//             quad.point.y += y;
+//           }
+//         }
+//         return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
+//     });
+//   };
+// }
+//
 
-        if (absX < xSpacing && absY < ySpacing) {
-            l = Math.sqrt(x * x + y * y) * energy;
+var fill = (i) => d3.schemeCategory10[i];
 
-            lx = (absX - xSpacing) / l;
-            ly = (absY - ySpacing) / l;
-
-            // the one that"s barely within the bounds probably triggered the collision
-            if (Math.abs(lx) > Math.abs(ly)) {
-                    lx = 0;
-            } else {
-                    ly = 0;
-            }
-
-            node.x -= x *= lx;
-            node.y -= y *= ly;
-            quad.point.x += x;
-            quad.point.y += y;
-
-            updated = true;
-        }
-      }
-      return updated;
-    };
-}
-
-function nbsDirected(a, linkedByIndex) {
-  var nbs = [];
-  for (var property in linkedByIndex) {
-    var s = property.split(",").map(d => parseInt(d));
-    // if (s[0] === a) {
-    //   nbs.push(s[1]);
-    // }
-    // else {
-      if (s[1] === a) {
-        nbs.push(s[0]);
-      }
-    // }
-  }
-  return _.uniq(nbs);
-}
-
-
-function collideCircle(data, alpha, padding) {
-  var quadtree = d3_old.geom.quadtree(data);
-  return function(d) {
-      var r = d.r + padding,
-          nx1 = d.x - r,
-          nx2 = d.x + r,
-          ny1 = d.y - r,
-          ny2 = d.y + r;
-      quadtree.visit(function(quad, x1, y1, x2, y2) {
-        if (quad.point && (quad.point !== d)) {
-          var x = d.x - quad.point.x,
-              y = d.y - quad.point.y,
-              l = Math.sqrt(x * x + y * y),
-              r = d.r + padding + quad.point.r;
-
-          if (l < r) {
-            l = (l - r) / l * alpha;
-            d.x -= x *= l;
-            d.y -= y *= l;
-            quad.point.x += x;
-            quad.point.y += y;
-          }
-        }
-        return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
-    });
-  };
-}
-
-
-var fill = d3_old.scale.category10();
-
-// d3_old.select("body").append("div")
+// d3.select("body").append("div")
 //   .on("click", () => console.log("it works with es6!"))
 //   .text("it works!");
 
@@ -270,49 +270,60 @@ var convert_edgelist_to_adjlist = function(vertices, edgelist) {
 
 // Breadth First Search using adjacency list
 var groupPath = function(d) {
-  if (d.nodes.length < 2) return null;
+  if (d.nodes.length < 3) return null;
 
-  var hull = d3_old.geom.hull()
-    .x(function(d) {
-    return d.x;
-  }).y(function(d) {
-    return d.y;
-  });
+  // var hull = d3.polygonHull()
+  //   .x(function(d) {
+  //   return d.x;
+  // }).y(function(d) {
+  //   return d.y;
+  // });
 
-  var labelLine = d3_old.svg.line()
-    .x(d => d.x)
-    .y(d => d.y)
-    .interpolate(offsetInterpolate(3 * 15)); // bigger: 2, 3
+  var ps = d3.polygonHull(d.nodes.map(d => [d.x, d.y])).reverse();
+  var buf = offsetInterpolate(15)(ps);
 
-  return labelLine(hull(d.nodes).reverse());
+  // console.log("bufLine", buf);
+  var labelLine = d3.line();
+    // .x(d => d.x)
+    // .y(d => d.y)
+    // .curve(offsetInterpolate); // bigger: 2, 3
+
+  // TODO: interpolate
+  return labelLine(ps);//labelLine(buf);
 };
 
 
-d3_old.json("diigo.json", function(error, data) {
+d3.json("diigo.json", function(error, data) {
   var diigo = data.slice(0, 100).map((d, i)=> {
     d.tags = d.tags.split(",");
     d.id = i;
     return d;
   });
+
   console.log("diigo length", diigo.length);
-  // diigo = diigo.filter(d => d.tags.indexOf("music") !== -1);
-  // console.log("rawData", rawData);
+
+  // diigo = diigo.filter(d => d.tags.indexOf("music") !== -1); console.log("rawData", rawData);
   // const { data: data, edges: edges } = prepareData(rawData.documents);
   // console.log("tagData", data);
   //d
   // data.documents.forEach(d => d.r = 12);
 
-  var zoom = d3_old.behavior.zoom()
-     .size(shiftedWidth, shiftedHeight)
+  var zoom = d3.zoom()
+
+     .extent([shiftedWidth, shiftedHeight])
      .scaleExtent([-10, 40])
      .on("zoom", () => {
-        // console.log("zoom", d3_old.event);
-        svg.attr("transform", "translate(" + d3_old.event.translate + ")scale(" + d3_old.event.scale + ")");
-        var w = 1 * d3_old.event.scale;
-        var h = 2 * d3_old.event.scale;
-        thumb
-          .style("width", w + "px")
-          .style("height", h + "px");
+        console.log("zoom", d3.event);
+        var translate = [d3.event.transform.x, d3.event.transform.y];
+        var scale = d3.event.transform.k;
+        svg.attr("transform", "translate(" + translate  + ")scale(" + scale + ")");
+
+        var w = 1 * d3.event.transform.k;
+        var h = 2 * d3.event.transform.k;
+        console.log("w", w, "h", h);
+        // thumb
+        //   .style("width", w + "px")
+        //   .style("height", h + "px");
 
         thumb.select("iframe")
           .style("transform", "translate("+ [- w + "px", - h / 2 + "px"] +")")
@@ -322,7 +333,7 @@ d3_old.json("diigo.json", function(error, data) {
         // thumb.style("height", h + "px");
      });
 
-  var svg = d3_old.select("body")
+  var svg = d3.select("body")
               .append("div")
               .attr("class", "node-map")
               .append("svg")
@@ -347,7 +358,7 @@ d3_old.json("diigo.json", function(error, data) {
         .style("fill", "none");
             //make transparent (vs black if commented-out)
   // svg.attr("transform", "scale(0.5)");
-  // var elmnt = d3_old.select("svg").node();
+  // var elmnt = d3.select("svg").node();
 
   // window.scrollTo(overflow.left, overflow.top ) ;
 
@@ -437,10 +448,18 @@ d3_old.json("diigo.json", function(error, data) {
     return copy;
   })));
 
-  var allTags = d3_old.nest()
+  var tagStreamDiv = d3.select("body")
+    .append("div")
+    .attr("class", "tag-stream")
+    .style("height", "300px")
+    .style("width", "1000px");
+  tagStream(spreadNodes.filter(d => !d.label), tagStreamDiv);
+
+  var allTags = d3.nest()
     .key(d => d.key)
     .entries(spreadNodes)
-  .sort((a, b) => d3_old.descending(a.values.length, b.values.length));
+  .sort((a, b) => d3.descending(a.values.length, b.values.length));
+
 
   // var tagLinks = [];
   // allTags.forEach((n, i)=> {
@@ -455,8 +474,8 @@ d3_old.json("diigo.json", function(error, data) {
   //   });
   // });
 
-  var wordScale = d3_old.scale.linear()
-      .domain(d3_old.extent(allTags, d => d.values.length))
+  var wordScale = d3.scaleLinear()
+      .domain(d3.extent(allTags, d => d.values.length))
       .rangeRound([7, 50]);
 
   var boundzoom = function(d) {
@@ -469,12 +488,13 @@ d3_old.json("diigo.json", function(error, data) {
       scale = Math.max(1, Math.min(8, 0.9 / Math.max(dx / width, dy / height))),
       translate = [width / 2 - scale * x, (height + viewBox.top) / 2 - scale * y];
 
-    // d3_old.select(this).attr("stroke", 0);
+    // d3.select(this).attr("stroke", 0);
     // console.log("hull", d);
-    // var hullDocs = doc.filter(e => d.nodes.find(n => n.id === e.id));
+    // var hullDocs = gDoc.filter(e => d.nodes.find(n => n.id === e.id));
     // console.log("hullDocs", hullDocs);
-    zoom.translate(translate);
-    zoom.scale(scale);
+    zoom.translateExtent(translate);
+    // TODO: maxScale 1000?
+    zoom.scaleExtent([scale, 1000]);
 
     svg.transition()
       .duration(750)
@@ -488,23 +508,25 @@ d3_old.json("diigo.json", function(error, data) {
     var x = d.x,
       y = d.y,
       scale = 150,//Math.max(1, Math.min(8, 0.9 / Math.max(dx / width, dy / height))),
-      translate = [shiftedWidth / 2 - scale * x, shiftedHeight / 2 - scale * y];
+      translate = [shiftedWidth / 2 - scale * x,
+        shiftedHeight / 2 - scale * y];
 
     svg.transition()
     .duration(750)
     // .style("stroke-width", 1.5 / scale + "px")
     .attr("transform", "translate(" + translate + ")scale(" + scale + ")");
   };
+  var labelCont = svg.append("g")
+      .attr("class", "hull-labels");
 
-  var lc = svg.append("g")
-      .attr("class", "hull-labels")
+  var labelG = labelCont
       .selectAll(".label-cont")
       .data(foci.comps(), d => d.id);
 
   // console.log("foci comps", foci.comps());
-  var lcEnter = lc.enter();
+  var labelGEnter = labelG.enter();
 
-  var tp = lcEnter
+  var textPath = labelGEnter
     .append("g")
     .attr("class", ".label-cont")
     .append("text")
@@ -517,18 +539,18 @@ d3_old.json("diigo.json", function(error, data) {
       .attr("id", d => "tp-hull" + d.id)
       .attr("xlink:href", d => "#hull " + d.id);
 
-  tp.selectAll("tspan")
+  textPath.selectAll("tspan")
     .data(d => d.tags)
     .enter()
     .append("tspan")
     .attr("font-size", function(d) {
-      // var wordScale = d3_old.select(this.parentNode).datum().scale;
+      // var wordScale = d3.select(this.parentNode).datum().scale;
       return wordScale(d.values.length);
     })
   .text(d => d.key+ " · ")
     .on("click", d => console.log("click0", d));
 
-  var hull = lc
+  var hull = labelGEnter
       // .attr("class", "group")
       // .append("path", "circle")
       .insert("path", ":first-child")
@@ -546,7 +568,7 @@ d3_old.json("diigo.json", function(error, data) {
         // d.isolevel = 0.0120;
         d.isolevel = 0.0020;
         var ids = d.nodes.map(d => d.id);
-        var hullNodes = d3_old.selectAll(".doc")
+        var hullNodes = d3.selectAll(".doc")
           .filter(e => ids.indexOf(e.id) !== -1);
 
         console.log("hullNodes", hullNodes);
@@ -562,31 +584,33 @@ d3_old.json("diigo.json", function(error, data) {
         // simulation.alphaTarget(0.7);
       });
 
-  var circle = svg.selectAll(".circle")
-    .data(foci.data().filter(d => d.cut))
-    .enter()
-    .append("circle")
-      // .attr("transform", d => "translate(" + (-d.width / 2) + "," + (-d.height/ 2) + ")")
-      .attr("class", "circle")
-      .attr("r", 7)
-      .attr("cx", d => d.x)
-      .attr("cy", d => d.y)
-      .attr("stroke", "red")
-      .attr("stroke-width", 2)
-      .attr("fill",  "none");
+  // var circle = svg.selectAll(".circle")
+  //   .data(foci.data().filter(d => d.cut))
+  //   .enter()
+  //   .append("circle")
+  //     // .attr("transform", d => "translate(" + (-d.width / 2) + "," + (-d.height/ 2) + ")")
+  //     .attr("class", "circle")
+  //     .attr("r", 7)
+  //     .attr("cx", d => d.x)
+  //     .attr("cy", d => d.y)
+  //     .attr("stroke", "red")
+  //     .attr("stroke-width", 2)
+  //     .attr("fill",  "none");
 
 
-  svg.append("g")
+  var bubbleCont = svg.append("g")
      .attr("class", "bubble-cont");
 
   var doc = svg.selectAll(".doc")
     .data(nodes.filter(d => !d.label), d => d.id);
 
-  doc
-    .enter()
-    .append("g")
+  var docEnter = doc
+    .enter();
+
+  var gDocEnter = docEnter.append("g");
+
+  var rectDoc = gDocEnter.append("rect")
     .attr("class", "doc")
-    .append("rect")
       // .attr("transform", d => "translate(" + (-d.width / 2) + "," + (-d.height/ 2) + ")")
       .attr("rx", 0.05)
       .attr("ry", 0.05)
@@ -594,10 +618,12 @@ d3_old.json("diigo.json", function(error, data) {
       .attr("stroke-width", 0.5)
       .attr("fill",  "white")
       .attr("width", d => d.width)
-      .attr("height", d => d.height)
-      .append("title")
+      .attr("height", d => d.height);
+
+  gDocEnter.append("title")
       .text(d => d.__setKey__);
 
+  // TODO: fix update
   var thumb = doc
       .append("foreignObject", ":first-child")
         // .attr("transform", null)
@@ -624,10 +650,10 @@ d3_old.json("diigo.json", function(error, data) {
     d.width = this.getBBox().width;
     d.height = this.getBBox().height;
 
-    d3_old.select(this).select("text")
+    d3.select(this).select("text")
       .attr("dy", d.height);
 
-    d3_old.select(this)
+    d3.select(this)
       .insert("rect", ":first-child")
       .attr("fill", "none")
       .attr("width", d.width)
@@ -644,20 +670,20 @@ d3_old.json("diigo.json", function(error, data) {
   //       .attr("class", function(d) { return "node" + (!d.children ? " node--leaf" : d.depth ? "" : " node--root"); })
   //       .on("click", d => console.log(d));
 
-  circle.append("circle")
-        .attr("id", function(d, i) { return "node-" + i; })
-        .attr("r", function(d) { return d.center.r; })
-        .style("stroke", "black")
-        .attr("fill", "none")
-        .attr("opacity", 0.1)
-        .on("click", d => console.log(d));
-
+  // circle.append("circle")
+  //       .attr("id", function(d, i) { return "node-" + i; })
+  //       .attr("r", function(d) { return d.center.r; })
+  //       .style("stroke", "black")
+  //       .attr("fill", "none")
+  //       .attr("opacity", 0.1)
+  //       .on("click", d => console.log(d));
+  //
   // var link = svg.selectAll(".link")
   //              .data(foci.links().filter(l => l.strength === 1));
 
   simulation.on("end", function() {
     hull.each(function(d) {
-      cropHullLabels(d, d3_old.select(this));
+      cropHullLabels(d, d3.select(this));
     });
 
     var deepLinks = _.flattenDeep(foci._cutEdges.map(e => {
@@ -725,7 +751,11 @@ d3_old.json("diigo.json", function(error, data) {
         .append("path")
         .attr("class", "backdrop")
         .attr("stroke-linejoin", "round")
-        .attr("opacity", 0.1);
+        .attr("opacity", 0.1)
+        .attr("d", d => hullcurve(d))
+        .attr("fill", "grey")
+        .attr("stroke", "lightgrey")
+        .on("click", boundzoom);
             // .attr("id", (d, i) => "co" + i)
 
       backdrop
@@ -735,11 +765,11 @@ d3_old.json("diigo.json", function(error, data) {
         .on("click", boundzoom);
         // .on("click", boundzoom)
         // .on("mouseover", function(d) {
-        //   d3_old.select(this).attr("opacity", 1);
+        //   d3.select(this).attr("opacity", 1);
         //   console.log("d", d);
         // })
         // .on("mouseout", function() {
-        //   d3_old.select(this).attr("opacity", 0.5);
+        //   d3.select(this).attr("opacity", 0.5);
         // });
 
       backdrop.exit().remove();
@@ -796,7 +826,7 @@ d3_old.json("diigo.json", function(error, data) {
         // TODO: not running right now
         // console.log("group", group);
         // this happens in a for loop
-        var bubble = svg.select(".bubble-cont")
+        var bubble = bubbleCont
            .selectAll(".bubble-"+ i + group.key)
            .data(group.d);
 
@@ -807,19 +837,28 @@ d3_old.json("diigo.json", function(error, data) {
           .append("path")
           .attr("class", "bubble-"+ i + group.key)
           .attr("stroke-linejoin", "round")
-          .attr("opacity", 0.3);
-              // .attr("id", (d, i) => "co" + i)
+          .attr("opacity", 0.3)
+          .attr("d", d => hullcurve(d))
+          .attr("fill", o(group.key))
+          .on("click", boundzoom)
+          .on("mouseover", function(d) {
+            d3.select(this).attr("opacity", 1);
+            console.log("d", d);
+          })
+          .on("mouseout", function() {
+            d3.select(this).attr("opacity", 0.5);
+          });
 
         bubble
           .attr("d", d => hullcurve(d))
           .attr("fill", o(group.key))
           .on("click", boundzoom)
           .on("mouseover", function(d) {
-            d3_old.select(this).attr("opacity", 1);
+            d3.select(this).attr("opacity", 1);
             console.log("d", d);
           })
           .on("mouseout", function() {
-            d3_old.select(this).attr("opacity", 0.5);
+            d3.select(this).attr("opacity", 0.5);
           });
 
         bubble.exit().remove();
@@ -839,9 +878,10 @@ d3_old.json("diigo.json", function(error, data) {
     //   .attr("y2", d => d.target.y);
     });
 
+  console.log("hull", hull, "doc", doc);
   simulation.on("tick", function() {
 
-    // var q2 = d3_old.geom.quadtree(nodes);
+    // var q2 = d3.geom.quadtree(nodes);
     // nodes.forEach(d => {
     //   if (d.clicked){
     //     // q2.visit(interCollide(d, 75, 8));
@@ -858,16 +898,13 @@ d3_old.json("diigo.json", function(error, data) {
     hull.attr("d", groupPath);
 
     hull.each(function(d) {
-      cropHullLabels(d, d3_old.select(this));
+      cropHullLabels(d, d3.select(this));
     });
 
-    doc
+    rectDoc
       .attr("transform", d => {
         return "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")";
-      })
-      .select("rect")
-      .attr("width", d => d.width)
-      .attr("height", d => d.height);
+      });
 
     label.attr("transform", d => {
       return "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")";
@@ -892,15 +929,15 @@ d3_old.json("diigo.json", function(error, data) {
     // rectBox.width = 80;
     // rectBox.height = 80;
 
-    // var thumbNail = d3_old.select(this).select("foreignObject div");
-    // var iframe = d3_old.select(this).select("foreignObject div iframe");
+    // var thumbNail = d3.select(this).select("foreignObject div");
+    // var iframe = d3.select(this).select("foreignObject div iframe");
     // console.log("iframe", iframe, "sibling", prev);
     // iframe.attr("src", "http://starkravingfinkle.org/blog");
 
     // iframe.style("width", w + "px");
     // iframe.style("height", h + "px");
 
-    // var preview = d3_old.select(this)
+    // var preview = d3.select(this)
     //   .insert("foreignObject", ":first-child")
     //     .attr("transform", null)
     //     .attr("width", d.width)
@@ -919,11 +956,12 @@ d3_old.json("diigo.json", function(error, data) {
     // console.log("BBox", bbox, "preview", prev);
   });
 
-  var tagCont = d3_old.select("body")
+  var tagListDiv = d3.select("body")
     .append("div")
-    .style("height", "600px")
+    .style("height", "300px")
     .attr("class", "tag-list");
-  // tagList(allTags, tagCont);
-  tagStream(spreadNodes.filter(d => !d.label), tagCont);
+  // TODO:
+  // tagList(allTags, tagListDiv);
+
 
 });

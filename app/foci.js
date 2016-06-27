@@ -1,4 +1,5 @@
-import d3 from "d3";
+// import d3 from "d3";
+import * as d3 from "d3";
 import _ from "lodash";
 import * as d3_force from "d3-force";
 console.log("d3_force", d3_force);
@@ -103,7 +104,11 @@ function runTree(nodes, links) {
 
 var collide = function(nodes) {
   return function(alpha) {
-    var quadtree = d3.geom.quadtree(nodes);
+    var quadtree = d3.quadtree()
+                     .x(d => d.x)
+                     .y(d => d.y)
+                     .addAll(nodes);
+
       for (var i = 0, n = nodes.length; i < n; ++i) {
         var d = nodes[i];
         // TODO: adopt to size of diigo
@@ -113,20 +118,19 @@ var collide = function(nodes) {
           ny1 = d.y - d.r,
           ny2 = d.y + d.r;
         quadtree.visit(function(quad, x1, y1, x2, y2) {
-          if (quad.point && (quad.point !== d)
-            && quad.point.comp !== d.comp && !d.label && !quad.point.label) {
-            // console.log("quad.point", quad.point.comp, d.comp)
-            var x = d.x - quad.point.x,
-                y = d.y - quad.point.y,
+          if (quad.data && (quad.data !== d)
+            && quad.data.comp !== d.comp && !d.label && !quad.data.label) {
+            var x = d.x - quad.data.x,
+                y = d.y - quad.data.y,
                 l = Math.sqrt(x * x + y * y),
-                r = d.r + quad.point.r;
+                r = d.r + quad.data.r;
 
             if (l < r) {
               l = (l - r) / l * alpha;
               d.x -= x *= l;
               d.y -= y *= l;
-              quad.point.x += x;
-              quad.point.y += y;
+              quad.data.x += x;
+              quad.data.y += y;
             }
           }
           return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
@@ -518,7 +522,7 @@ function extractSets(data) {
     }
   }
 
-  individualSets.forEach(function(k, v) {
+  individualSets.each(function(v, k) {
     if (!sets.get(k)) {
       sets.set(k, v);
     }

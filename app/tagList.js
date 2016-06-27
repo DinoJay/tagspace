@@ -7,7 +7,9 @@ import _ from "lodash";
 //   .x(d => d.y)
 //   .y(d => d.x);
 
-var stepLine = d3.svg.line().interpolate("step-before")
+console.log("d3", d3);
+
+var stepLine = d3.line().curve(d3.stepBefore)
         .x(d => d.x)
         .y(d => d.y);
 // function neighbors(a, linkedByIndex, nodes) {
@@ -25,7 +27,7 @@ var stepLine = d3.svg.line().interpolate("step-before")
 //   }
 //   return nbs;
 // }
-
+console.log("d3.curveCatmullRom", d3.curveCatmullRom);
 // function hierarchy(cur, nodes, linkedByIndex) {
 //   cur._children = neighbors(cur, linkedByIndex, nodes);
 //   cur.value = cur._children.length;
@@ -148,7 +150,7 @@ function tagList(nodes, cont) {
     //         .range([0, maxBarWidth])
   };
 
-  root.yScale = d3.scale.linear()
+  root.yScale = d3.scaleLinear()
     .domain([1, d3.max(root.children, d => d.values.length)])
     .range([10, root.height]);
 
@@ -191,7 +193,7 @@ function tagList(nodes, cont) {
     update(root);
 
   function update(source) {
-    var tree = d3.layout.tree()
+    var tree = d3.tree()
         .nodeSize([0, 30]);
     // Compute the flattened node list. TODO use d3.layout.hierarchy.
     var treeNodes = tree.nodes(source);//_.orderBy(tree.nodes(source), d => d.values.length, "desc");
