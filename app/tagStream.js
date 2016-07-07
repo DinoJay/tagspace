@@ -1,32 +1,85 @@
 import * as d3 from "d3";
-import brewer from "colorbrewer";
-import _ from "lodash";
+// import brewer from "colorbrewer";
+// import _ from "lodash";
 // import d3_hierarchy from "d3-hierarchy";
 // import * as d3_force from "d3-force";
 
-// "2016/04/16 10:50:21 +0000"
-// var format = d3.time.format("%m/%d/%y ");
+// "2016/04/16 10:50:21 +0000" var format = d3.time.format("%m/%d/%y ");
 
-console.log("d3", d3);
+// var timeMap = d3.map({day: d3.timeDay, month: d3.timeMonth, year: d3.timeYear})
+//
+//
+var colors = ["#66cdff","#79c8ff","#8ac4ff","#9bbdff","#a7b8ff","#b3b3ff","#beaeff","#c9a7ff"];
+// d3.scaleThreshold()
+//     .range();
+
+function styleAxis(self) {
+    self.selectAll("text")
+        .attr("transform", function() {
+             return "translate(" + this.getBBox().height*-2 + "," + this.getBBox().height + ")rotate(-45)";
+      });
+     self.selectAll("text")
+        .style("text-anchor", "middle");
+        // .attr("dy", 10);
+        // .attr("dx", -5);
+
+  var ticks = self.selectAll(".tick");
+  ticks.each(function() {
+    d3.select(this).select("circle").remove();
+    d3.select(this).append("circle")
+                            .attr("r", 4)
+                            .attr("transform", "translate(8, 0)")
+                            .attr("fill", "black");
+  });
+  ticks.selectAll("line").remove();
+}
+
+function pushNewData(props, state, nextTimeFormat) {
+  var allNewData = prepareData(props.data, nextTimeFormat);
+  var pushData = allNewData.reduce((acc, d) => {
+    var i = state.simData.findIndex(old => old.tagKey === d.tagKey && !old.marked);
+    var old = state.simData[i];
+    if (old) {
+      old.size = d.size;
+      old.date = d.date;
+      old.key = d.key;
+      old.values = d.values;
+      // old.vy = d.vy;
+      // old.vx = d.vx;
+      old.marked = true;
+    } else acc.push(d);
+    return acc;
+  }, []);
+  state.simData.push(...pushData);
+  state.simData.forEach(d => d.marked = false);
+}
+
+const timeFormatMap = d3.map({
+  year: {key: "year", nextKey: "month", prevKey: "year", format: d3.timeYear},
+  month: {key: "month", nextKey: "week", prevKey: "year", format: d3.timeMonth},
+  week: {key: "week", nextKey: "day", prevKey: "month", format: d3.timeDay},
+  day: {key: "day", nextKey: "day", prevKey: "week", format: d3.timeDay}
+}, d => d.key);
+
 var format = d3.timeFormat("%Y/%m/%d %H:%M:%S %Z");
 var parseTime = d3.timeParse("%Y/%m/%d %H:%M:%S %Z");
 
-var color = d3.scaleOrdinal().range(brewer.Spectral[9]);
+var color = d3.scaleOrdinal().range(colors);
 
 var height = 300,
-    width  = 1000;
-var margin = {left: 100, right: 100, top: 0};
+    width  = 1400;
+var margin = {left: 100, right: 50, top: 0, bottom: 50};
 
-var bundleLine = d3.line()
-            .curve(d3.curveStepAfter);
+var bundleLine = d3.line();
+            // .curve(d3.curveStepAfter);
 
-function rectCollide(nodes) {
+function rectCollide(nodes, strength) {
   return function(alpha) {
     var quadtree = d3.quadtree()
                      .x(d => d.x)
                      .y(d => d.y)
                      .addAll(nodes);
-
+    var padding = 6;
 
     for (var i = 0, n = nodes.length; i < n; ++i) {
       var node = nodes[i];
@@ -36,7 +89,7 @@ function rectCollide(nodes) {
           var x = node.x - quad.data.x,
             y = node.y - quad.data.y,
             xSpacing = (quad.data.width + node.width) / 2,
-            ySpacing = (quad.data.height + node.height) / 2,
+            ySpacing = (quad.data.height + node.height + padding) / 2,
             absX = Math.abs(x),
             absY = Math.abs(y),
             l,
@@ -58,8 +111,11 @@ function rectCollide(nodes) {
               ly = 0;
             }
 
-            node.vx -= x *= lx;
-            node.vy -= y *= ly;
+            x *= lx * alpha * strength;
+            y *= ly * alpha * strength;
+
+            node.vx -= x;
+            node.vy -= y;
             quad.data.vx += x;
             quad.data.vy += y;
 
@@ -73,44 +129,31 @@ function rectCollide(nodes) {
 
 function prepareData(rawData, time) {
 
-  console.log("rawData", rawData);
   var tags = rawData.map(d => {
       d.date = parseTime(d.created_at);
-      d.key = d.key;
-      d.date = d.date;
+      // console.log("time", format(time(d.date)));
       d.width = 8 * 5,
       d.height = 4 * 5;
-      d.value = 1;
-      d.vx = d.vx;
-      d.vy = d.vy;
-      d.x = d.x;
-      d.y = d.y;
+      d.x = width / 2;
+      d.y = height / 2;
+      // d.x = d.x;
+      // d.y = d.y;
       return d;
   });
 
-  var nested = d3.nest()
-    .key(d => time(d.date))
+  // console.log("tags", tags);
+  var nestedDateTag = d3.nest()
+    .key(d => d.key + format(time(d.date)))
     .entries(tags);
 
-  console.log("nested", nested);
-
-  nested.forEach(g => {
-    g.date = new Date(d3.median(g.values, d => d.date));
-    console.log("median", g.date);
-    g.values = d3.nest().key(d => d.key)
-      .entries(g.values);
-    g.values.forEach(d => {
-      d.date = g.date;
-      d.size = d.values.length;
-    });
+  nestedDateTag.forEach(g => {
+    g.date = new Date(time(g.values[0].date));
+    g.size = g.values.length;
+    g.tagKey = g.values[0].key;
   });
 
-  var values = nested.reduce((acc, g) => acc.concat(g.values), []);
-  // console.log("")
-  return values;
-
-  // return {groups: nested, data: _.flatten(layers.map(l => l.values))};
-  // return {groups: nested, tags: tags};
+  // console.log("nested", nestedDateTag);
+  return nestedDateTag;
 }
 
 var dbg = d => {
@@ -119,13 +162,48 @@ var dbg = d => {
 };
 
 
-function create(spreadDocs, cont) {
-  var mainG = cont.append("svg")
-                .attr("width", width)
-                .attr("height", height)
-                .append("g")
-                .attr("class", "main")
-                .attr("transform", "translate(" + [0, margin.top] + ")");
+function create(data, cont) {
+  cont
+    .append("div")
+    .attr("class", "view-name")
+    .append("h3")
+    .text("time-cloud")
+    .on("click", () => d3.select(".paneOptions")
+                         .style("left", margin.left + "px")
+                         .style("top", 450 + "px")
+                         .style("display", "inline")
+    );
+
+  var paneOptions = cont
+    .append("div")
+    .attr("class", "paneOptions");
+
+  var times = ["year", "month", "week", "day"];
+  var y = d3.scaleBand()
+      .domain(times)
+      .range([0, 200]);
+
+  paneOptions.append("h4")
+    .text("Aggregate");
+
+  paneOptions
+    .append("div")
+    .selectAll(".legendButton")
+    .data(times)
+    .enter()
+    .append("input")
+    .attr("title", d => d)
+    .attr("type", "button")
+    // .attr("class", "legendButton")
+    .attr("value", d => d);
+
+  var svg = cont.append("svg")
+                  .attr("width", width)
+                  .attr("height", height);
+
+  var mainG = svg.append("g")
+                  .attr("class", "main")
+                  .attr("transform", "translate(" + [0, margin.top] + ")");
 
   mainG
       .insert("rect", ":first-child")
@@ -141,88 +219,93 @@ function create(spreadDocs, cont) {
 
   mainG.append("g")
     .attr("class", "x axis")
-    .attr("transform", "translate(" + [0, height - 40] + ")");
+    .attr("transform", "translate(" + [0, height - margin.bottom] + ")");
 
-  update(spreadDocs, d3.timeWeek);
+
+  var props = {data: data};
+  var initTags = prepareData(props.data, d3.timeYear , null);
+  var simulation = d3.forceSimulation(initTags);
+  var state = {
+    time: "year",
+    xScale: null,
+    simulation: simulation,
+    simData: initTags,
+    k: 1
+  };
+  update(props, state);
 }
 
-function update(spreadDocs, time, xScale, alpha) {
-  // var x = d3.time.scale().range([0, 600]);
-  // var y = d3.scale.linear().range([600, 0]);
+function update(props, state) {
+  var time = timeFormatMap.get(state.time),
+      nextTime = timeFormatMap.get(time.nextKey),
+      prevTime = timeFormatMap.get(time.prevKey),
+      simulation = state.simulation,
+      xScale = state.xScale;
 
-  console.log("spreadDocs", spreadDocs);
-  // TODO: FIX cleaning
-
-  var tags = prepareData(spreadDocs, time);
-  console.log("tags", tags);
-
+  // console.log("time", time.key);
   var wordScale = d3.scaleLinear()
-      .domain(d3.extent(tags, d => d.size))
-      .rangeRound([10, 50]);
+      .domain(d3.extent(simulation.nodes(), d => d.size))
+      .rangeRound([7, 30]);
 
-  // var y = d3.scaleLinear().range([0, 600])
-  //           .domain([0, d3.max(groups, d => d.values.length)]);
-
-  //d3.scale.ordinal().rangeRoundBands([0, 580], .05)
-  if(xScale === undefined) // TODO
+    var [t1, t2] = d3.extent(simulation.nodes(), d => d.date);
+    // console.log("t1", t1);
+    // console.log("t2", t2);
+    var t0 = time.format.offset(t1, -1);
+    var t3 = time.format.offset(t2, +1);
+    // console.log("t2", t1);
+    // console.log("t3", t2);
     xScale = d3.scaleTime()
-      .domain(d3.extent(_.flatten(tags.map(d => d.values)), d => d.date))
+      .domain([t0, t3])
       .range([margin.left, width - margin.right]);
-    else {
-      console.log("time defined", time);
-      console.log("Xscale", xScale.domain());
-    }
-    // .ticks(d3.timeMonth, 2);
-            // .domain(groups.map(d => d.date));
-  // groups.forEach(d => {
-  //   d.width = xScale(d.values.length);
-  //   d.height = 40;
-  //   d.values.forEach(d => d.value = 1);
-  // });
+      // .range([t0, t3].map(d3.scaleTime()
+      //   .domain([t1, t2])
+      //   .range([margin.left, width - margin.right]))
+      // );
+  // xScale = d3.scaleTime().domain([Date.UTC(2001, 0, 1), Date.UTC(2002, 0, 1)]).range([margin.left, width - margin.right]),
+  // console.log("xScale domain", xScale.domain());
 
   var xAxis = d3.axisBottom()
       .scale(xScale)
-      .ticks(time);
+      .ticks(time.format)
+      .tickSize(12).tickPadding(-2);
 
   var mainG = d3.select("g.main");
 
   mainG.call(d3.zoom()
-               .scaleExtent([1, 1000])
+               .scaleExtent([-1, 10])
                .translateExtent([[-50, -50], [width, height]])
-               .on("zoom", zoomed)
-          );
+               .duration(1000)
+               .on("zoom", zoomed))
+               .on("dblclick.zoom", null);
 
-  // var view = svg.append("rect")
-  //     .attr("class", "view")
-  //     .attr("x", 0.5)
-  //     .attr("y", 0.5)
-  //     .attr("fill", "none")
-  //     .attr("width", width - 1)
-  //     .attr("height", height - 1);
+  var gTag = mainG.select("g.tags");
+           // .attr("transform", "translate(" + [0, margin.top] + ")");
 
-             // .attr("transform", "translate(" + [margin.left, margin.top] + ")");
-    var gTag = mainG.select("g.tags")
-             .attr("transform", "translate(" + [0, margin.top] + ")");
+  var gAxis = d3.select(".x.axis")
+    .call(xAxis)
+    .call(styleAxis);
 
-    // .attr("transform", "translate(0," + height + ")");
-    // .attr("transform", "translate(" + [margin.left, margin.top] + ")")
-    d3.select(".x.axis")
-      .call(xAxis);
 
   var tag = gTag.selectAll(".tag")
-    .data(tags, d => d.key + format(d.date));
+    .data(simulation.nodes(), d => d.key);
 
   var tagEnterG = tag.enter()
     .append("g")
     .attr("class", "tag");
 
-  var rectEnter = tagEnterG.append("rect")
-    .style("fill", (_, i) => color(i % 3))
-    .style("opacity", 1);
+  tagEnterG.append("rect")
+    .style("opacity", 0.9);
 
-  var textEnter = tagEnterG.append("text")
-    .text(d => d.key)
-    .style("font-size", d => wordScale(d.size) + "px")
+  tagEnterG.append("text")
+    .text(d => d.tagKey);
+
+  tag.exit().remove();
+
+  var tagEnterUpdate = tagEnterG.merge(tag);
+
+  tagEnterUpdate.style("font-size", d => wordScale(d.size) + "px");
+
+  tagEnterUpdate.select("text")
     .each(function(d) {
       var self = d3.select(this);
       var bbox = self.node().getBBox();
@@ -230,7 +313,8 @@ function update(spreadDocs, time, xScale, alpha) {
       d.height = bbox.height;
     })
     .on("click", function(d) {
-      var timeLink = d3.select(this.parentNode).selectAll(".time-link")
+      console.log("time link", d);
+      var timeLink = d3.select("g.tags").selectAll(".time-link")
                       .data(d.values)
                       .enter()
                       .insert("path", ":first-child")
@@ -239,26 +323,18 @@ function update(spreadDocs, time, xScale, alpha) {
                       .attr("d", e => {
                         var a = [
                           [d.x, d.y],
-                          [xScale(e.date), height - 40]
+                          [xScale(e.date), height - margin.bottom]
                         ];
-                        console.log("a", a, "e.date", e.date);
                         return bundleLine(a);
                       });
     });
 
-
-    textEnter
+    tagEnterUpdate.select("text")
       .attr("dy", d => d.height / 2);
 
-    rectEnter
+    tagEnterUpdate.select("rect")
       .attr("width", d =>  d.width)
       .attr("height", d => d.height);
-
-
-  tag.exit().remove();
-
-  var tagEnterUpdate = tagEnterG;//.merge(tag);
-
   // var rect = tagEnterUpdate.select("rect");
   // var text = tagEnterUpdate.select("text");
 
@@ -272,15 +348,10 @@ function update(spreadDocs, time, xScale, alpha) {
   //     .attr("cy", d => d.y)
   //     .on("click", d => console.log("d.date", d.date));
 
-  // if (simulation === undefined)
-    var simulation = d3.forceSimulation(tags)
-          // .force("y", d3.forceY(height / 2))
-          .force("x", d3.forceX(d => xScale(d.date) ? xScale(d.date) : 0).strength(0.3))
-          // .force("y", d3.forceY(height / 2).strength(0.2))
-          // .force("center", d3_force.forceCenter().x(width/2))
-          // .force("collide", d3_force.forceCollide(4))
-          .force("collide", rectCollide(tags))
-          // .stop()
+    simulation
+          .force("y", d3.forceY(height / 2).strength(0.1))
+          .force("x", d3.forceX(d => xScale(d.date)).strength(0.3))
+          .force("collide", rectCollide(simulation.nodes(), 6))
           .on("tick", () => {
             // rect
             //   .attr("x", d => d.x - d.width / 2)
@@ -290,6 +361,15 @@ function update(spreadDocs, time, xScale, alpha) {
               .attr("transform", d => {
                 return "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")";
               });
+
+            tagEnterG.select("rect").style("fill", (_, i) => color(i));
+
+            // tag
+            //   .attr("transform", d => {
+            //     return "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")";
+            //   })
+            //   .select("rect").style("fill",  "green");
+
             //
             // tag.select("rect")
             //   .attr("x", d => d.x - d.width / 2)
@@ -299,27 +379,84 @@ function update(spreadDocs, time, xScale, alpha) {
             //   .attr("x", d => d.x - d.width / 2)
             //   .attr("y", d => d.y + d.height / 4);
           })
-          .alpha(alpha ? alpha : 1);
+          .velocityDecay(0.6)
+          // .alphaDecay(1)
+          .alpha(0.5);
         // .stop();
 
+    simulation.restart();
 
   function zoomed() {
-    // console.log("zoomed", xAxis.scale());
-    var newXscale = d3.event.transform.rescaleX(xScale);
-    // view.attr("transform", d3.event.transform);
-    // console.log("d3.event.transform", d3.event.transform);
-    console.log("xscale domain", newXscale.domain(), newXscale.range());
+    if(state.simulation.alpha() > 0.4) return;
+    var newState;
+    if (d3.event.transform.k < state.k) {
+      console.log("zoom out");
+      pushNewData(props, state, prevTime.format);
+      simulation.nodes(state.simData);
+      newState = {
+        time: prevTime.key,
+        simulation: simulation,
+        simData: state.simData,
+        k: d3.event.transform.k
+      };
+      update(props, newState);
+    } else {
+      if (state.time !== "day") {
+        pushNewData(props, state, nextTime.format);
+        simulation.nodes(state.simData);
+        newState = {
+          time: nextTime.key,
+          simulation: simulation,
+          simData: state.simData,
+          k: d3.event.transform.k
+        };
+        update(props, newState);
+      } else {
+          var newXscale = d3.event.transform.rescaleX(xScale);
+          d3.select(".x.axis").call(xAxis.scale(newXscale).ticks(d3.timeDay))
+                              .call(styleAxis);
 
-    var newTags = d3.map(prepareData(spreadDocs, d3.timeDay), d => d.key);
-    simulation.nodes().forEach(d => d.date = newTags.get(d.key).date);
-    simulation.force("x", d3.forceX(d => newXscale(d.date)).strength(0.1));
-    // d3.selectAll(".tag").remove();
-    // update(_.flatten(tags.map(d => d.values)), d3.timeDay, newXscale, 0.5);
-    d3.select(".x.axis").call(xAxis.scale(newXscale));
-    // simulation.force("collide", null);
-    simulation.alpha(1);
-    simulation.restart();
+          simulation
+            .force("x", d3.forceX(d => newXscale(d.date)).strength(0.3))
+            .force("collide", rectCollide(simulation.nodes(), 3));
+          simulation.alpha(0.4);
+          simulation.restart();
+
+      }
+
+    }
+
+  // }
   }
+}
+
+function slider(g) {
+
+  var margin = {right: 50, left: 20, top: 20};
+
+  var height = 200;
+
+  var r = 10;
+
+
+  // g.attr("transform", "translate(" + [margin.left, (height - margin.bottom)  / 2] + ")");
+  //
+  // console.log("d3 scale month", y.domain());
+  // var sliderG = g.append("g")
+  //     .attr("class", "slider")
+  //     .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+  //
+  // console.log("domain", y.domain());
+  //
+  // sliderG.selectAll(".date-bubble")
+  //  .data(y.domain())
+  //  .enter()
+  //  .append("rect")
+  //  .attr("x", margin.left + r/2)
+  //  .attr("y", d => dbg(y(d)))
+  //  .attr("width", 20)
+  //  .attr("height", 20)
+  //  .attr("fill", "blue");
 
 }
 

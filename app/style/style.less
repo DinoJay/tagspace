@@ -1,18 +1,32 @@
 @import "../../node_modules/colors.css/css/colors.css";
+@import "./slider.less";
+@import "./pane.less";
+@import "./docMap.less";
+@import "./minimal-ui.css";
 // svg {
 //   float: left;
 // }
 //
-.node-map {
+body {
+    background: url(./pics/linedpaper.png) repeat top left fixed;
+    background-position-y: 10px;
+    font-family: 'Sorts Mill Goudy', serif;
+}
+.view-name {
+    background: white;
+    display: inline-block;
+    position: absolute;
+    padding: 0px 8px 0px 8px;
+    border-right: thin dashed #85A0A4;
+    border-bottom: thin dashed #85A0A4;
+    // border-bottom: 1px solid #85A0A4;
+}
+.view {
   float: left;
-  border: 1px solid silver;
+  border-bottom: thin dashed #85A0A4;
+  border-right: thin dashed #85A0A4;
 }
 
-.link {
-  fill: none;
-  stroke: black;
-  stroke-width: 1.5px;
-}
 
 .tag-list {
   float: left;
@@ -21,8 +35,15 @@
 }
 
 
-.tag-stream {
-  // float: left;
+.link {
+  fill: none;
+  stroke: black;
+  stroke-width: 1.5px;
+}
+
+.time-cloud {
+  margin-top: 5px;
+  float: left;
   // border: 1px solid silver;
   // overflow-y: scroll;
 }
@@ -34,74 +55,12 @@ li {
 
 .descr {
     // font-size:  18px;
-    // paint-order: stroke;
-    // stroke: #000000;
-    // // stroke-width: 1px;
+    // paint-order: stroke; // stroke: #000000; // // stroke-width: 1px;
     // stroke-linecap: butt;
     // stroke-linejoin: miter;
     // font-weight: 800;
 }
 
-
-.thumbnail {
-    // display: inline-block;
-    // line-height: 150%;
-    // margin-right: 2.5em;
-    // margin-bottom: .7em;
-    position: absolute;
-    border:1px solid black;
-    white-space: nowrap;
-}
-
-.live-example {
-  // height: 100px !important;
-  // overflow: hidden;
-  position: fixed;
-}
-
-.link-preview {
-  // position: absolute;
-  width: 1028px;
-  height: 800px;
-  border: none;
-  pointer-events: none;
-  -webkit-transform: scale(0.2);
-  -moz-transform: scale(0.2);
-  -ms-transform: scale(0.2);
-  transform: scale(0.2);
-  -webkit-transform-origin: 0 0;
-  -moz-transform-origin: 0 0;
-  -ms-transform-origin: 0 0;
-  transform-origin: 0 0;
-}
-
-.thumbnail iframe {
-  // width: 1440px;
-  // height: 900px;
-  // width: 50px;
-  // height: 50px;
-  // -ms-zoom: 0.25;
-  // frameborder: 0;
-  // -moz-transform: scale(0.25);
-  // -moz-transform-origin: 0 0;
-  // -o-transform: scale(0.25);
-  // -o-transform-origin: 0 0;
-  // -webkit-transform: scale(0.25);
-  // -webkit-transform-origin: 0 0;
-  // overflow: hidden;
-  position: fixed;
-}
-
-.thumbnail {
-  // z-index: 100;
-  position: fixed;
-  background: green;
-}
-
-body {
-  // overflow-x: hidden;
-  // overflow-y: hidden;
-}
 
 .root {
   cursor: pointer;
@@ -145,3 +104,32 @@ path.link {
 .axis--x path {
   display: none;
 }
+
+body {
+  font: 10px sans-serif;
+}
+
+// rect {
+//   fill: #ddd;
+// }
+
+.grid line {
+  stroke: #fff;
+}
+
+.grid line.minor {
+  stroke-width: .5px;
+}
+
+.grid text {
+  display: none;
+}
+
+.axis line {
+  stroke: #000;
+}
+
+.domain {
+  display: none;
+}
+

@@ -5,102 +5,13 @@ import * as d3_force from "d3-force";
 console.log("d3_force", d3_force);
 
 var maxDepth = 1;
-var bigger = true;
+var bigger = false;
 
 var isCutEdge = (l, nodes, linkedByIndex) => {
   var tgt = nodes[l.target];
   var targetDeg = outLinks(tgt, nodes, linkedByIndex).length;
   return l.level % maxDepth === 0 && targetDeg > 0;
 };
-
-function runTree(nodes, links) {
-
-  function hierarchy(cur, nodes, linkedByIndex) {
-    cur._children = neighbors(cur, linkedByIndex, nodes);
-    cur.value = cur._children.length;
-    cur.children = [];
-    // console.log("cur", cur);
-    // console.log("cur children", cur.children);
-
-    cur._children.forEach(next => {
-      // if(seen.indexOf(next) === -1)
-      hierarchy(next, nodes, linkedByIndex);
-    });
-  }
-
-  function neighbors(a, linkedByIndex, nodes) {
-    var nb;
-    var nbs = [];
-
-    // console.log("a", a);
-    for (var property in linkedByIndex) {
-      var s = property.split(",").map(d => parseInt(d));
-      if (s[0] === a.index) {
-        // console.log("s[1]", s[1]);
-        nb = nodes[s[1]];
-        // console.log("nb", nb);
-        nbs.push(nb);
-      }
-    }
-    return nbs;
-  }
-  var linkedByIndex = {};
-
-
-  var root = {
-    index:     nodes.length,
-    level:     0,
-    "__key__": "root",
-    sets     : [],
-    // children: nodes.filter(d => d.level === 0),
-    nodes: []
-  };
-
-  nodes.forEach(d => {
-    // if (d.level === 1) {
-      links.push({
-        source: root.index,
-        target: d.index
-      });
-    // }
-  });
-
-  nodes.push(root);
-
-  links.forEach(function(d) {
-    linkedByIndex[d.source + "," + d.target] = true;
-  });
-
-  // var linkObjs = links.map(l => {
-  //   l.source = nodes[l.source];
-  //   l.target = nodes[l.target];
-  // });
-
-  hierarchy(root, nodes, linkedByIndex);
-  // var rootNode = d3_hierarchy.hierarchy(root);
-  // rootNode
-  //   .sum((d) => d.nodes.length);
-  //
-  // rootNode.sort((a, b) => a.data.nodes.length - b.data.nodes.length);
-
-  // pack(rootNode);
-  // var packed = rootNode.descendants();
-  // packed.forEach(p => {
-  //   p.data.tags = _.uniq(_.flatten(p.data.children.map(c => c.sets)));
-  // });
-  //
-  // // packed.forEach(d => {
-  // //   // console.log("pack d", d.x, d.y);
-  // //   d.data.center = {
-  // //     x: _.clone(d.x),
-  // //     y: _.clone(d.y)
-  // //   };
-  // // });
-  // //
-  // console.log("packed", packed.map(d => d.data).filter(d => d.children.length > 0));
-
-  return {root: root, linkedByIndex, nodes: nodes};//packed.map(d => d.data);
-}
 
 var collide = function(nodes) {
   return function(alpha) {
@@ -348,8 +259,15 @@ function start() {
                           // scale: 40, 40 * 3,
                          .strength(bigger ? - 40 * 5 : 40)
                          // .distanceMin(9)
-                         .distanceMax(300)
+                         .distanceMax(50)
       )
+
+      // .force("x", d3_force.forceX(500)
+      //   .strength(0.5)
+      // )
+      // .force("y", d3_force.forceY(300)
+      //   .strength(0.5)
+      // )
       // TODO: encapsulate in function
       .force("link", d3_force.forceLink()
                .distance(l => l.target.label ? 1 : l.cut ? 100 : bigger ? 10 * 5 : 9)
@@ -378,7 +296,7 @@ function start() {
     that._sets = nodes;
 
     that._reducedEdges = links.filter(l => !l.cut);
-    that._cutEdges = links.filter(l => l.cut);
+    // that._cutEdges = links.filter(l => l.cut);
 
     // console.log("nODes", nodes);
     // console.log("cutEdges", that._cutEdges);
@@ -437,23 +355,20 @@ function start() {
           });
       } else {
           d.center = Object.assign({}, d.center);
-          // console.log("d", d);
           d.vx = 0;
           d.vy = 0;
           d.x = 0;
           d.y = 0;
       }
     });
-
     return nodes;
   }
+
   var nodes = this.sets();
-  var clonedNodes = _.cloneDeep(this.sets());
   var links = this.links();
-  var clonedLinks = _.cloneDeep(links);
 
   this.data(runForce(nodes, links, this));
-  this._hierarchy = runTree(clonedNodes, clonedLinks);
+  // this._hierarchy = runTree(clonedNodes, clonedLinks);
 
   return this;
 }
@@ -546,15 +461,15 @@ function initSets(data) {
     linkedByIndex[l.source + "," + l.target] = l;
   });
 
-  this._reducedEdges = edges.filter(l => {
-    // return l.level % maxDepth !== 0;// || targetDeg === 0;
-    return !isCutEdge(l, nodes, linkedByIndex);
-  });
+  // this._reducedEdges = edges.filter(l => {
+  //   // return l.level % maxDepth !== 0;// || targetDeg === 0;
+  //   return !isCutEdge(l, nodes, linkedByIndex);
+  // });
   // console.log("Biconnected COmps", bicomps);
 
   // this._bicomps = bicomps.map(g => g.map(i => setData[i]));
   this._cutEdges = edges.filter(l => {
-    return l.level % maxDepth === 0; // && targetDeg > 0;
+    return l.level % maxDepth === 0;
 
   });
   this._fociLinks = edges;

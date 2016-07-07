@@ -21,7 +21,8 @@ module.exports = {
         loaders: ["babel?presets[]=es2015"]
       },
       {test: /\.css$/, loader: "style-loader!css-loader"},
-      {test: /\.less$/, loader: "style-loader!css-loader!less-loader"}
+      {test: /\.less$/, loader: "style-loader!css-loader!less-loader"},
+      { test: /\.(png|jpg)$/, loader: "file-loader" }
     ]
   },
   devServer: {

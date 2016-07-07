@@ -1,5 +1,5 @@
 import * as d3 from "d3";
-// import d3 from "d3";
+import treeLayout from "./oldTree/tree.js";
 import _ from "lodash";
 
 // var line = d3.line()
@@ -9,7 +9,10 @@ import _ from "lodash";
 
 console.log("d3", d3);
 
-var stepLine = d3.line().curve(d3.stepBefore)
+// var stepLine = d3.line().curve(d3.stepBefore)
+//         .x(d => d.x)
+//         .y(d => d.y);
+var stepLine = d3.line().curve(d3.curveStep)
         .x(d => d.x)
         .y(d => d.y);
 // function neighbors(a, linkedByIndex, nodes) {
@@ -193,7 +196,7 @@ function tagList(nodes, cont) {
     update(root);
 
   function update(source) {
-    var tree = d3.tree()
+    var tree = treeLayout()
         .nodeSize([0, 30]);
     // Compute the flattened node list. TODO use d3.layout.hierarchy.
     var treeNodes = tree.nodes(source);//_.orderBy(tree.nodes(source), d => d.values.length, "desc");
@@ -203,7 +206,7 @@ function tagList(nodes, cont) {
 
     nodes.forEach(n => {
       if (n.children) {
-        n.yScale = d3.scale.linear()
+        n.yScale = d3.scaleLinear()
           .domain([1, d3.max(n.children, d => d.values.length)])
           .range([10, n.parent.yScale(n.values.length)]);
       }
@@ -217,15 +220,16 @@ function tagList(nodes, cont) {
       // nodes.length * barHeight + margin.top + margin.bottom);
 
     // Update the nodes…
-    var root = cont.selectAll("div.root")
+    var root = svg.selectAll("g.root")
         .data([rootDatum], d => d.key);
 
     var rootEnter = root.enter()
-      .insert("div", ":first-child")
+      .insert("g", ":first-child")
         .attr("class", "root");
 
     rootEnter
-      .append("input")
+      .append("foreignObject", ":first-child")
+        .append("xhtml:input")
         .on("focusin", function(d) {
           console.log("focusin");
           var input = d3.select(this).node().value;
@@ -245,9 +249,10 @@ function tagList(nodes, cont) {
           console.log("maxDepth", maxDepth);
           var newSrc = findByDepth(source, maxDepth);
           console.log("newSrc", newSrc);
-          newSrc.children = newSrc.children.filter(d => d.key.includes(input));
+          newSrc.children = newSrc.children
+            .filter(d => d.key.includes(input));
 
-          newSrc.yScale = d3.scale.linear()
+          newSrc.yScale = d3.scaleLinear()
             .domain([1, d3.max(source.children, d => d.values.length)])
             .range([10, source.height]);
 
@@ -275,11 +280,45 @@ function tagList(nodes, cont) {
     // Enter any new nodes at the parent's previous position.
     nodeEnter.append("rect")
       .style("fill", color)
-      .on("click", click);
+      .on("click", click)
+      .on("mouseover", d => {
+
+        var tp = d3.selectAll(".tps").filter(e => {
+          // console.log("ET", d.key, e, e.tags.find(a => a.key === d.key));
+          // return e.tags.indexOf(d.key) !== -1;
+          return e.tags.find(a => a.key === d.key) ? true : false;
+        });
+
+        var toRem = tp.selectAll("tspan").filter(e => {
+          // console.log("tspan data", e, e.key !== d.key);
+          return e.key !== d.key;
+        });
+
+        toRem.remove();
+
+        console.log("toRem", toRem);
+        // tp.data([d.key]);
+        // var others = d3.selectAll(".tagLabel").filter(e => e.key !== d.key);
+        // others.style("opacity", 0.3);
+        // d.prevSize = parseInt(tp.attr("font-size"));
+
+        console.log("tp", tp);
+      })
+      .on("mouseout", d => {
+        console.log("d", d);
+        d3.selectAll(".tagLabel").filter(e => e.key === d.key)
+          .attr("font-size", d.prevSize);
+
+        d3.selectAll(".tagLabel").filter(e => e.key !== d.key)
+          .style("opacity", 1);
+
+      });
 
     nodeEnter.append("text");
 
-    node.select("text")
+    var nodeMerge = nodeEnter.merge(node);
+
+    nodeMerge.select("text")
       .style("font-size", d => d.parent.yScale(d.values.length))
       .text(d => d.key)
       .each(function(d) {d.bbox = d3.select(this).node().getBBox();});
@@ -295,7 +334,7 @@ function tagList(nodes, cont) {
 
     svg.attr("height", height);
 
-    node.select("text").transition()
+    nodeMerge.select("text").transition()
       .duration(duration)
       .attr("dy", d => d.height / 2)
       .attr("dx", d => d.width / 2)
@@ -308,7 +347,7 @@ function tagList(nodes, cont) {
       .attr("transform", d => "translate(" + [d.y, d.x] + ")")
       .style("opacity", 1);
 
-    node.transition()
+    nodeMerge.transition()
       .duration(duration)
       .attr("transform", d => "translate(" + [d.y, d.x] + ")")
       .style("opacity", 1)
@@ -330,8 +369,10 @@ function tagList(nodes, cont) {
         .data(tree.links(treeNodes), d => d.target.key);
 
     // Enter any new links at the parent's previous position.
-    link.enter().insert("path", "g")
+    var linkEnter = link.enter().insert("path", "g")
         .attr("class", "link");
+
+    var linkMerge = linkEnter.merge(link);
         // .attr("d", (d) => {
         //   return stepLine([{
         //     x: d.source.y,
@@ -354,7 +395,7 @@ function tagList(nodes, cont) {
         // });
 
     // Transition links to their new position.
-    link
+    linkMerge
       // .transition()
       // .duration(duration)
        .attr("d", d => {
