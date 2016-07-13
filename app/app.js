@@ -51,7 +51,7 @@ function styleTspan(wordScale) {
           var q = ".bundle-link-" + src.id + "-" + c.id;
           console.log("q", q);
           var sel0 = d3.selectAll(q)
-            .style("stroke-opacity", 1);
+            .style("stroke-opacity", 0.2);
           console.log("sel0", sel0);
         });
       });
@@ -424,6 +424,7 @@ function update(diigo, zoom, boundzoom, foci) {
       e.width = 3; // bigger 1: 10, 20
       e.height = 6;
       e.clicked = false;
+      e.level = d.level;
       // e.tags = e.sets;
       return e;
     });
@@ -734,22 +735,33 @@ function update(diigo, zoom, boundzoom, foci) {
 
     var docLinks = [];
     nodes.forEach(s => {
+      console.log("scomp", s.comp);
+      var srcComp = appliedComps.find(d => d.id === s.comp);
+      if (srcComp === undefined) return;
+      var srcSets = srcComp.sets.map(d => d.key);
       // var scomp = appliedComps.find(d => d.id === s.comp);
       // var sCompTags = tags
-      nodes.forEach(t => {
+      nodes.forEach((t, i)=> {
+      var tgtComp = appliedComps.find(d => d.id === t.comp);
+      if (tgtComp === undefined) return;
+      var tgtSets = tgtComp.sets.map(d => d.key);
         // var tcomp = appliedComps.find(d => d.id === s.comp);
-        if (s.comp !== t.comp && _.intersection(s.tags.slice(0, 4), t.tags.slice(0,4)).length > 0) {
+        if (s.comp !== t.comp && _.intersection(srcSets, tgtSets).length > 0) {
         var filtered = docLinks.filter(l => l.source === s.index && l.target === t.index || l.source === t.index && l.target === s.index);
           if (filtered.length === 0)
           docLinks.push({
+              id: s.index + t.index,
+              id2: t.index + s.index,
               source: s.index,
               target: t.index
           });
         }
       });
     });
+    var aggrLinks = _.uniqBy(docLinks, "id");
 
-    console.log("deepLinks", deepLinks);
+    console.log("docLinks", docLinks.length);
+    console.log("aggrLinks", aggrLinks.length);
 
     // var flatLinks = foci._cutEdges.map(l => {
     //                     return {
@@ -764,7 +776,7 @@ function update(diigo, zoom, boundzoom, foci) {
                     .step_size(0.1)
                     .compatibility_threshold(0.65)
                     .nodes(nodes)
-                    .edges(deepLinks);
+                    .edges(aggrLinks);
 
     var bundledEdgeSegments = fbundling();
 
@@ -1040,7 +1052,7 @@ function update(diigo, zoom, boundzoom, foci) {
 }
 
 d3.json("diigo.json", function(error, data) {
-  var diigo = data.slice(0, 200).map((d, i) => {
+  var diigo = data.slice(0, 300).map((d, i) => {
     d.tags = d.tags.split(",");
     d.id = i;
     return d;

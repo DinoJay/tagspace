@@ -20,7 +20,7 @@ var collide = function(nodes) {
       for (var i = 0, n = nodes.length; i < n; ++i) {
         var d = nodes[i];
         // TODO: adopt to size of diigo
-        d.r = 50;
+        d.r = 70;
         var nx1 = d.x - d.r,
           nx2 = d.x + d.r,
           ny1 = d.y - d.r,
@@ -277,7 +277,7 @@ function start() {
                })
                .iterations(4))
       // .force("position", d3_force.forcePosition());
-      // .force("collide", d3_force.forceCollide(d => d.label ? 0 : 7))
+      .force("collide", d3_force.forceCollide(d => d.label ? 0 : 7))
       // .force("specialCollide", (alpha) => {
       //   var quadtree = d3.geom.quadtree(nodes);
       //   collide2(alpha, nodes, quadtree);
@@ -464,7 +464,7 @@ function extractSets(data) {
 function initSets(data) {
   if (!data) return this._sets;
 
-  this._maxDepth = 3;
+  this._maxDepth = 2;
   var sets = extractSets(data);
   var setData = sets.values();
 
@@ -587,7 +587,7 @@ function prepareGraph(that, setData) {
             // return d.nodes.length;
             var conn = connectionsIndex(d.index, linkedByIndex,
               sv.map(i => nodes[i]));
-            return 100 * conn / d.sets.length;
+            return 100 * conn * d.nodes.length / d.sets.length;
           }).map(d => d.index).reverse();
 
           // console.log("vs", sorted.map(u => nodes[u].__key__));
