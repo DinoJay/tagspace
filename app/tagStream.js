@@ -179,9 +179,9 @@ function create(data, cont) {
     .attr("class", "paneOptions");
 
   var times = ["year", "month", "week", "day"];
-  var y = d3.scaleBand()
-      .domain(times)
-      .range([0, 200]);
+  // var y = d3.scaleBand()
+  //     .domain(times)
+  //     .range([0, 200]);
 
   paneOptions.append("h4")
     .text("Aggregate");
@@ -294,7 +294,7 @@ function update(props, state) {
     .attr("class", "tag");
 
   tagEnterG.append("rect")
-    .style("opacity", 0.9);
+    .style("opacity", 0.3);
 
   tagEnterG.append("text")
     .text(d => d.tagKey);
@@ -330,7 +330,7 @@ function update(props, state) {
     });
 
     tagEnterUpdate.select("text")
-      .attr("dy", d => d.height / 2);
+      .attr("dy", d => d.height * 3/4);
 
     tagEnterUpdate.select("rect")
       .attr("width", d =>  d.width)
@@ -362,7 +362,7 @@ function update(props, state) {
                 return "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")";
               });
 
-            tagEnterG.select("rect").style("fill", (_, i) => color(i));
+            tagEnterG.select("rect").style("fill", "#8ac4ff");
 
             // tag
             //   .attr("transform", d => {

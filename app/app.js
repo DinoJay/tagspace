@@ -15,6 +15,59 @@ import timeCloud from "./tagStream.js";
 // bigger scale :0.0048
 //
 console.log("brewer", brewer);
+const linkOpacity = 0.05;
+
+var dbg = d => {
+  console.log("dbg", d);
+  return d;
+};
+
+function styleTspan(wordScale) {
+  return function(self) {
+    self.attr("class", "tagLabel")
+    .attr("font-size", function(d) {
+      return wordScale(d.values.length);
+    })
+  .text(d => d.key+ " · ")
+    .on("mouseover", function(d) {
+
+      var lc = d3.selectAll(".textPath")
+        .filter(e => e.tags.map(d => d.key).includes(d.key));
+      var selComps = lc.data();
+
+      d3.select(this)
+        .style("font-weight", "bold");
+        // .style("fill", "red");
+
+      d.tmpSel = lc.selectAll("tspan").filter(e => e.key === d.key);
+      d.tmpSel
+        .style("font-weight", "bold")
+        .style("font-size", d => wordScale(d.values.length) + 10);
+        // .style("fill", "red");
+
+      console.log("selected Comps", selComps);
+      selComps.forEach(src => {
+        selComps.forEach(c => {
+          var q = ".bundle-link-" + src.id + "-" + c.id;
+          console.log("q", q);
+          var sel0 = d3.selectAll(q)
+            .style("stroke-opacity", 1);
+          console.log("sel0", sel0);
+        });
+      });
+
+    })
+    .on("mouseout", function(d){
+      d.tmpSel
+        .style("font-weight", null)
+        .style("font-size", d => wordScale(d.values.length))
+        .style("fill", null);
+
+      d3.selectAll(".bd")
+        .style("stroke-opacity", linkOpacity);
+    });
+  };
+}
 
 var o = d3.scaleOrdinal()
     .domain(["foo", "bar", "baz"])
@@ -26,7 +79,7 @@ var o = d3.scaleOrdinal()
 //              .range([0, 10]);
 
 var hullcurve = d3.line()
-  .curve(d3.curveBasisOpen)
+  .curve(d3.curveBasisClosed)
   .x(d => d.x)
   .y(d => d.y);
 
@@ -251,11 +304,15 @@ var groupPath = function(d) {
   return offsetInterpolate(15)(hull);
 };
 
+var groupPathAll = function(nodes) {
+  var hull = d3.polygonHull(nodes.map(d => [d.x, d.y])).reverse();
+  return offsetInterpolate(0)(hull);
+};
 
 function create(diigo) {
   var zoom = d3.zoom()
      .extent([shiftedWidth, shiftedHeight])
-     .scaleExtent([-10, 40])
+     .scaleExtent([-100, 40])
      .on("zoom", () => {
         console.log("zoom", d3.event);
         var translate = [d3.event.transform.x, d3.event.transform.y];
@@ -295,6 +352,9 @@ function create(diigo) {
                 .on("dblclick.zoom", null);
                 // .append("g");
                 //
+                //
+  svg.append("g").attr("class", "edge-seg");
+
   d3.select(".node-map")
     .insert("div", ":first-child")
     .attr("class", "view-name")
@@ -316,12 +376,13 @@ function create(diigo) {
     // simulation.alphaTarget(0.7);
     var bbox = this.getBBox(),
       dx = bbox.width,
-      dy = bbox.height + 50,
+      dy = bbox.height,
       x = (bbox.x + bbox.x + bbox.width) / 2,
       y = (bbox.y + bbox.y + bbox.height) / 2,
-      scale = Math.max(1, Math.min(8, 0.9 / Math.max(dx / width, dy / height))),
+      scale = Math.max(-10, Math.min(8, 0.9 / Math.max(dx / width, dy / height))),
       translate = [width / 2 - scale * x, (height + viewBox.top) / 2 - scale * y];
 
+    console.log("boundzoom", bbox);
     // d3.select(this).attr("stroke", 0);
     // console.log("hull", d);
     // var hullDocs = gDoc.filter(e => d.nodes.find(n => n.id === e.id));
@@ -351,7 +412,7 @@ function update(diigo, zoom, boundzoom, foci) {
 
   var cont = d3.select(".node-map"),
   svg = cont.select("svg g"),
-  labelCont = d3.select(".hull-labels");
+  hullLabelCont = d3.select(".hull-labels");
 
   console.log("diigo length", diigo.length);
 
@@ -391,7 +452,7 @@ function update(diigo, zoom, boundzoom, foci) {
     return c;
   });
 
-  console.log("foci.comps()", foci.comps());
+  console.log("appliedComps", appliedComps);
 
   // console.log("foci data", foci.data(), foci.data().length);
   // console.log("foci links", foci.links());
@@ -473,20 +534,18 @@ function update(diigo, zoom, boundzoom, foci) {
     .attr("transform", "translate(" + translate + ")scale(" + scale + ")");
   };
 
-  var labelG = labelCont
-      .selectAll(".label-cont")
+  var labelG = hullLabelCont
+      .selectAll("g")
       .data(foci.comps(), d => d.id);
 
   // console.log("foci comps", foci.comps());
   var labelGEnter = labelG.enter();
 
   var textPath = labelGEnter
-    .append("g")
-    .attr("class", ".label-cont")
+    // .append("g")
     .append("text")
-      .attr("class", "descr")
     .append("textPath")
-      .attr("class", "tps")
+      .attr("class", d => "label-cont-" + d.id + " textPath")
       .attr("text-anchor", "middle")
       .attr("startOffset", "75%")
       .attr("alignment-baseline", "text-after-edge")
@@ -494,16 +553,19 @@ function update(diigo, zoom, boundzoom, foci) {
       .attr("id", d => "tp-hull" + d.id)
       .attr("xlink:href", d => "#hull " + d.id);
 
+  console.log("foci links", foci.links());
   textPath.selectAll("tspan")
-    .data(d => d.tags)
+    .data(d => d.sets)
+
+      // foci.links()
+      // .filter(l => l.source.comp === d.id || l.target.comp === d.id)
+      // .map(l => l.source.comp === d.id ? l.source.tags : l.target.tags)
+      // .reduce((acc, t) => acc.concat(dbg(t)), [])
+      // .map(t => dbg(t))//d.tags.map(t => t.key).includes(t.key))
+    // )
     .enter()
     .append("tspan")
-    .attr("class", "tagLabel")
-    .attr("font-size", function(d) {
-      return wordScale(d.values.length);
-    })
-  .text(d => d.key+ " · ")
-    .on("click", d => console.log("click0", d));
+    .call(styleTspan(wordScale));
 
   var hull = labelGEnter
       // .attr("class", "group")
@@ -552,8 +614,7 @@ function update(diigo, zoom, boundzoom, foci) {
   var bubbleCont = svg.append("g")
      .attr("class", "bubble-cont");
 
-  var doc = svg.selectAll(".doc")
-    .data(nodes.filter(d => !d.label), d => d.id);
+  var doc = svg.selectAll(".doc").data(nodes.filter(d => !d.label), d => d.id);
 
   var docEnter = doc
     .enter();
@@ -637,29 +698,58 @@ function update(diigo, zoom, boundzoom, foci) {
   //              .data(foci.links().filter(l => l.strength === 1));
 
   simulation.on("end", function() {
-    hull.each(function(d) {
-      cropHullLabels(d, d3.select(this));
-    });
+    // hull.each(function(d) {
+    //   cropHullLabels(d, d3.select(this));
+    // });
 
     var deepLinks = _.flattenDeep(foci._cutEdges.map(e => {
-                      var src, tgt;
-                      if (e.source.nodes.length > e.target.nodes.length) {
-                        src = e.source;
-                        tgt = e.target;
-                      }
-                      else {
-                        src = e.target;
-                        tgt = e.source;
-                      }
-                      return src.nodes.map(s => {
-                        return tgt.nodes.map(t => {
-                          return {
-                            source: nodes.find(n => n.id === s.id).index,
-                            target: nodes.find(n => n.id === t.id).index
-                          };
-                        });
-                      });
+      var src, tgt;
+      if (e.source.nodes.length > e.target.nodes.length) {
+        src = e.source;
+        tgt = e.target;
+      }
+      else {
+        src = e.target;
+        tgt = e.source;
+      }
+      // TODO: check
+      if (src.comp === tgt.comp) return [];
+      var srcComp = appliedComps.find(d => d.id === src.comp);
+      var tgtComp = appliedComps.find(d => d.id === tgt.comp);
+      if (_.intersection(srcComp.sets.map(d => d.key),
+        tgtComp.sets.map(d => d.key)).length > 0) {
+        return srcComp.nodes.map(s => {
+          return tgtComp.nodes.reduce((acc, t)=> {
+            if (_.intersection(s.tags, t.tags).length > 0) {
+              acc.push({
+                source: nodes.find(n => n.id === s.id).index,
+                target: nodes.find(n => n.id === t.id).index
+              });
+            }
+            return acc;
+          }, []);
+        });
+      } else return [];
     }));
+
+    var docLinks = [];
+    nodes.forEach(s => {
+      // var scomp = appliedComps.find(d => d.id === s.comp);
+      // var sCompTags = tags
+      nodes.forEach(t => {
+        // var tcomp = appliedComps.find(d => d.id === s.comp);
+        if (s.comp !== t.comp && _.intersection(s.tags.slice(0, 4), t.tags.slice(0,4)).length > 0) {
+        var filtered = docLinks.filter(l => l.source === s.index && l.target === t.index || l.source === t.index && l.target === s.index);
+          if (filtered.length === 0)
+          docLinks.push({
+              source: s.index,
+              target: t.index
+          });
+        }
+      });
+    });
+
+    console.log("deepLinks", deepLinks);
 
     // var flatLinks = foci._cutEdges.map(l => {
     //                     return {
@@ -671,7 +761,7 @@ function update(diigo, zoom, boundzoom, foci) {
     // console.log("deepLinks", deepLinks);
 
     var fbundling = edgeBundling()
-                    .step_size(1)
+                    .step_size(0.1)
                     .compatibility_threshold(0.65)
                     .nodes(nodes)
                     .edges(deepLinks);
@@ -681,145 +771,147 @@ function update(diigo, zoom, boundzoom, foci) {
     bundledEdgeSegments.forEach( d => {
     // for each of the arrays in the results
     // draw a line between the subdivions points for that edge
-        svg.selectAll(".bundle-line").remove();
-        svg
-          .insert("path", ":first-child")
-          .style("stroke-width", 1)
-          .style("stroke", "#ff2222")
-          .style("fill", "none")
-          .style("stroke-opacity", 0.1) //use opacity as blending;
-          .attr("d", bundleLine(d))
-          .attr("class", "bundle-link");
+      svg.selectAll(".bundle-line").remove();
+      var src = d[0];
+      var tgt = d[d.length - 1];
+      svg.select(".edge-seg")
+        .insert("g", ":first-child")
+        .attr("class", "bundle-link-" + src.comp + "-" + tgt.comp + " bd")
+        .append("path")
+        .attr("class", "bundle-link-" + src.comp + "-" + tgt.comp + " bd")
+        .style("stroke-width", 1)
+        .style("stroke", "#C35817")
+        .style("fill", "none")
+        .style("stroke-opacity", linkOpacity) //use opacity as blending;
+        .attr("d", bundleLine(d));
     });
 
-    marching_squares(group => {
-      // TODO: hull zoom
-      // this happens in a for loop
-      var backdrop = svg.select(".bubble-cont")
-         .selectAll(".backdrop")
-         .data(group.d);
-
-      // console.log("group d", group.d);
-            // .attr("d", function(d){ return curve(d); })
-      backdrop.enter()
-        // .insert("path", ":first-child")
-        .append("path")
-        .attr("class", "backdrop")
-        .attr("stroke-linejoin", "round")
-        .attr("opacity", 0.1)
-        .attr("d", d => hullcurve(d))
-        .attr("fill", "grey")
-        .attr("stroke", "lightgrey")
-        .on("click", boundzoom);
-            // .attr("id", (d, i) => "co" + i)
-
-      backdrop
-        .attr("d", d => hullcurve(d))
-        .attr("fill", "grey")
-        .attr("stroke", "lightgrey")
-        .on("click", boundzoom);
-        // .on("click", boundzoom)
-        // .on("mouseover", function(d) {
-        //   d3.select(this).attr("opacity", 1);
-        //   console.log("d", d);
-        // })
-        // .on("mouseout", function() {
-        //   d3.select(this).attr("opacity", 0.5);
-        // });
-
-      backdrop.exit().remove();
-
-      // TODO: divide
-      }, [{values: foci.data()}], 0.005);
+    // marching_squares(group => {
+    //   // TODO: hull zoom
+    //   // this happens in a for loop
+    //   var backdrop = svg.select(".bubble-cont")
+    //      .selectAll(".backdrop")
+    //      .data(group.d);
+    //
+    //   // console.log("group d", group.d);
+    //         // .attr("d", function(d){ return curve(d); })
+    //   backdrop.enter()
+    //     // .insert("path", ":first-child")
+    //     .append("path")
+    //     .attr("class", "backdrop")
+    //     .attr("stroke-linejoin", "round")
+    //     .attr("opacity", 0.1)
+    //     .attr("d", d => hullcurve(d))
+    //     .attr("fill", "grey")
+    //     .attr("stroke", "lightgrey")
+    //     .on("click", boundzoom);
+    //         // .attr("id", (d, i) => "co" + i)
+    //
+    //   backdrop
+    //     .attr("d", d => hullcurve(d))
+    //     .attr("fill", "grey")
+    //     .attr("stroke", "lightgrey")
+    //     .on("click", boundzoom);
+    //     // .on("click", boundzoom)
+    //     // .on("mouseover", function(d) {
+    //     //   d3.select(this).attr("opacity", 1);
+    //     //   console.log("d", d);
+    //     // })
+    //     // .on("mouseout", function() {
+    //     //   d3.select(this).attr("opacity", 0.5);
+    //     // });
+    //
+    //   backdrop.exit().remove();
+    //
+    //   // TODO: divide
+    //   }, [{values: foci.data()}], 0.005);
 
     appliedComps.forEach((c, i) => {
       // console.log("current comp", c);
       // c.sets.forEach(s => {
       //   // console.log("set", s);
       //   s.values = _.flatten(s.values.map(n => {
-      //     return [
-      //       {x: n.x, y: n.y},
+      //     return [ {x: n.x, y: n.y},
       //       {x: n.x, y: n.y + n.height},
       //       {x: n.x + n.width, y: n.y},
       //       {x: n.x + n.width, y: n.y + n.height}
       //     ];
       //   }));
       // });
-      var bufSets;
-      if (false) {
-        var padding = 0;
-        bufSets = c.sets.map(s => {
-          return {
-            values: _.flatten(s.values.map(n => {
-                // n.x = n.x - n.width / 2;
-                // n.y = n.y - n.height / 2;
-              return [
-               {x: n.x, y: n.y},
-                {x: n.x, y: n.y + (n.height / 2) + padding},
-                {x: n.x, y: n.y - (n.height / 2) - padding},
-                {x: n.x + (n.width / 2) + padding, y: n.y},
-                {x: n.x - (n.width / 2) - padding, y: n.y},
-                // //
-                {x: n.x + n.width / 2, y: n.y - (n.height / 2) - padding},
-                {x: n.x + n.width / 2, y: n.y + (n.height / 2) - padding},
-                //
-                {x: n.x - n.width / 2, y: n.y - (n.height / 2) - padding},
-                {x: n.x - n.width / 2, y: n.y + (n.height / 2) - padding}
-
-                // {x: n.x - n.width / 4, y: n.y - n.height / 4},
-                // {x: n.x - n.width / 4, y: n.y + n.height / 4},
-                //
-                // {x: n.x + n.width / 4, y: n.y - n.height / 4},
-                // {x: n.x + n.width / 4, y: n.y + n.height / 4}
-              ];
-            }))
-          };
-        });
-      } else bufSets = c.sets;
-
       marching_squares(group => {
         // TODO: not running right now
         // console.log("group", group);
         // this happens in a for loop
-        var bubble = bubbleCont
+        var bubbleGroup = bubbleCont
            .selectAll(".bubble-"+ i + group.key)
-           .data(group.d);
+           .data([group]);
 
-        // console.log("group d", group.d);
-              // .attr("d", function(d){ return curve(d); })
+        var bubbleGroupEnter = bubbleGroup.enter()
+          .append("g")
+          .attr("class", "bubble " + group.key);
+
+        var bubble = bubbleGroupEnter.selectAll("path")
+          .data(d => d.path);
+
         var bubbleEnter = bubble.enter()
-          // .insert("path", ":first-child")
-          .append("path")
-          .attr("class", "bubble-"+ i + group.key + "bubble")
+          .append("path");
+
+        var bubbleMerge = bubbleEnter.merge(bubble);
+
+        bubbleMerge
+          .attr("class", (_, i) => "bubble-"+ i + group.key + "bubble")
           .attr("stroke-linejoin", "round")
           .attr("opacity", 0.5)
           .attr("d", d => hullcurve(d))
           .attr("fill", o(group.key))
+          .style("cursor", "pointer")
           .on("click", boundzoom)
-          .on("mouseover", function(d) {
+          .on("mouseover", function() {
             d3.select(this).attr("opacity", 1);
-            console.log("d", d);
+            console.log("group", group, "comp", c);
+            var tp = d3.select(".label-cont-" + c.id);
+
+            var comp = appliedComps.find(d => d.id === c.id);
+
+            d3.selectAll(".doc")
+              .filter(d => comp.nodes.map(d => d.id).includes(d.id))
+              .style("opacity", 0.1);
+
+            var ids = group.values.map(d => d.id);
+            d3.selectAll(".doc")
+              .filter(d => ids.includes(d.id))
+              .style("opacity", 1);
+
+            console.log("tags", tags);
+            console.log("group", group);
+            var interSet =_.intersection(...group.values.map(d => d.tags));
+            console.log("interset", interSet);
+            var tags = comp.tags.filter(d => interSet.includes(d.key));
+
+            tp.selectAll("tspan").remove();
+            tp.selectAll("tspan")
+              .data(tags)
+              .enter()
+              .append("tspan")
+              .call(styleTspan(wordScale));
           })
           .on("mouseout", function() {
             d3.select(this).attr("opacity", 0.5);
-          });
+            d3.selectAll(".doc").style("opacity", 1);
 
-        // var bubbleMerge = bubbleEnter.merge(bubble);
-
-        bubble
-          .attr("d", d => hullcurve(d))
-          .attr("fill", o(group.key))
-          .on("click", boundzoom)
-          .on("mouseover", function(d) {
-            d3.select(this).attr("opacity", 1);
-            console.log("d", d);
-          })
-          .on("mouseout", function() {
-            d3.select(this).attr("opacity", 0.5);
+            var tp = d3.select(".label-cont-" + c.id);
+            console.log("tp", tp);
+            tp.selectAll("tspan").remove();
+            tp.selectAll("tspan")
+              .data(c.sets)
+              .enter()
+              .append("tspan")
+              .call(styleTspan(wordScale));
           });
 
         bubble.exit().remove();
-      }, bufSets, 0.024); // bigger: 0.0048, 0.024 (with updated bubble points)
+
+      }, c.sets, 0.024); // bigger: 0.0048, 0.024 (with updated bubble points)
     });
 
     // link.enter()
@@ -833,6 +925,19 @@ function update(diigo, zoom, boundzoom, foci) {
     //   .attr("y1", d => d.source.y)
     //   .attr("x2", d => d.target.x)
     //   .attr("y2", d => d.target.y);
+
+    var zoomHull = svg
+        // .attr("class", "group")
+        // .append("path", "circle")
+        .append("path")
+        .attr("class", "hull")
+        .attr("id", "all-hull")
+        .attr("d", groupPathAll(nodes))
+        .style("fill", "none")
+        .on("click", boundzoom)
+        .on("mouseover", function() {d3.select(this).attr("fill", "red");});
+
+    console.log("zoom", zoomHull);
     });
 
   console.log("hull", hull, "doc", doc);
@@ -854,9 +959,9 @@ function update(diigo, zoom, boundzoom, foci) {
 
     hull.attr("d", groupPath);
 
-    hull.each(function(d) {
-      cropHullLabels(d, d3.select(this));
-    });
+    // hull.each(function(d) {
+    //   cropHullLabels(d, d3.select(this));
+    // });
 
     rectDoc
       .attr("transform", d => {
@@ -882,6 +987,8 @@ function update(diigo, zoom, boundzoom, foci) {
        .attr("stroke", 0.5);
 
     zoomRect(d);
+
+    // var zoomHullData = d3.polygonHull(d.nodes.map(d => [d.x, d.y])).reverse();
     // boundzoom.bind(this)();
     // rectBox.width = 80;
     // rectBox.height = 80;
@@ -928,14 +1035,17 @@ function update(diigo, zoom, boundzoom, foci) {
     .style("width", "1350px");
 
   timeCloud(spreadNodes.filter(d => !d.label), timeCloudDiv);
+  console.log("foci._cutEdges", foci._cutEdges);
 
 }
 
 d3.json("diigo.json", function(error, data) {
-  var diigo = data.slice(0, 300).map((d, i) => {
+  var diigo = data.slice(0, 200).map((d, i) => {
     d.tags = d.tags.split(",");
     d.id = i;
     return d;
   });
+  //diigo.filter(d => d.tags.includes("d3"))
+  console.log("Diigo", diigo);
   create(diigo);
 });

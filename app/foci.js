@@ -4,10 +4,7 @@ import _ from "lodash";
 import * as d3_force from "d3-force";
 console.log("d3_force", d3_force);
 
-var maxDepth = 1;
-var bigger = false;
-
-var isCutEdge = (l, nodes, linkedByIndex) => {
+var isCutEdge = (l, nodes, linkedByIndex, maxDepth) => {
   var tgt = nodes[l.target];
   var targetDeg = outLinks(tgt, nodes, linkedByIndex).length;
   return l.level % maxDepth === 0 && targetDeg > 0;
@@ -23,12 +20,13 @@ var collide = function(nodes) {
       for (var i = 0, n = nodes.length; i < n; ++i) {
         var d = nodes[i];
         // TODO: adopt to size of diigo
-        d.r = bigger ? 50 * 1.7 : 50;
+        d.r = 50;
         var nx1 = d.x - d.r,
           nx2 = d.x + d.r,
           ny1 = d.y - d.r,
           ny2 = d.y + d.r;
         quadtree.visit(function(quad, x1, y1, x2, y2) {
+          // important check
           if (quad.data && (quad.data !== d)
             && quad.data.comp !== d.comp && !d.label && !quad.data.label) {
             var x = d.x - quad.data.x,
@@ -68,11 +66,14 @@ function simple_comp(nodes, links) {
 
   var vertices = nodes.map(d => d.index);
   var edgeList = links.map(l => {
-    var edge = [l.source.index, l.target.index]; return edge;
+    var edge = [l.source.index, l.target.index];
+    return edge;
   });
   // console.log("edgeList", edgeList);
 
   var adjlist = convert_edgelist_to_adjlist(vertices, edgeList);
+  console.log("adjList", adjlist, adjlist.length, "vertices", vertices,
+  vertices.length);
 
   for (v in adjlist) {
     if (adjlist.hasOwnProperty(v) && !visited[v]) {
@@ -164,7 +165,6 @@ function deriveSets(nodes) {
 
   var groups = uniq_nested_data.map(g => {
     g.id = g.key;
-    g.leaves = g.values.map(d => d.index);
     return g;
   });
 
@@ -249,18 +249,18 @@ function start() {
     });
 
     links.forEach(l => {
-      if (isCutEdge(l, nodes, linkedByIndex))
+      if (isCutEdge(l, nodes, linkedByIndex, that._maxDepth))
         l.cut = true;
       else l.cut = false;
     });
 
     var simulation = d3_force.forceSimulation(nodes)
-      .force("charge", d3_force.forceManyBody()
-                          // scale: 40, 40 * 3,
-                         .strength(bigger ? - 40 * 5 : 40)
-                         // .distanceMin(9)
-                         .distanceMax(50)
-      )
+      // .force("charge", d3_force.forceManyBody()
+      //                     // scale: 40, 40 * 3,
+      //                    .strength(0)
+      //                    // .distanceMin(9)
+      //                    .distanceMax(50)
+      // )
 
       // .force("x", d3_force.forceX(500)
       //   .strength(0.5)
@@ -270,14 +270,14 @@ function start() {
       // )
       // TODO: encapsulate in function
       .force("link", d3_force.forceLink()
-               .distance(l => l.target.label ? 1 : l.cut ? 100 : bigger ? 10 * 5 : 9)
+               .distance(l => l.target.label ? 1 : l.cut ? 100 : 9)
                .strength(l => {
                  var def = 1 / Math.min(l.source.outLinks.length, l.target.outLinks.length);
                  return l.cut ? def : 1;
                })
                .iterations(4))
       // .force("position", d3_force.forcePosition());
-      .force("collide", d3_force.forceCollide(d => d.label ? 0 : 7))
+      // .force("collide", d3_force.forceCollide(d => d.label ? 0 : 7))
       // .force("specialCollide", (alpha) => {
       //   var quadtree = d3.geom.quadtree(nodes);
       //   collide2(alpha, nodes, quadtree);
@@ -300,8 +300,9 @@ function start() {
 
     // console.log("nODes", nodes);
     // console.log("cutEdges", that._cutEdges);
+    var simpleComps = simple_comp(nodes, that._reducedEdges);
 
-    var comps = simple_comp(nodes, that._reducedEdges).map((g, i) => {
+    var comps = simpleComps.map((g, i) => {
       var id = i + "comp";
       var compNodes = _.flatten(g.map(d => d.nodes)).filter(d => d);
       // console.log("compNodes", compNodes);
@@ -320,18 +321,32 @@ function start() {
         .entries(_.flatten(compNodes.filter(d => d).map(d => d.tags)))
       .sort((a, b) => d3.descending(a.values.length, b.values.length));
 
+      var interTags = _.intersection(compNodes.filter(d => d)
+        .map(d => d.tags));
+
       return {
         id: id,
         values: g,
         tags: tags,
         // TODO: check later
         nodes: compNodes,
+        interTags: interTags,
         sets: deriveSets(compNodes)
         // nodes: g
       };
     });
 
-    console.log("filter", nodes.filter(n => n.comp));
+
+    var cutComps = simple_comp(nodes, links.filter(l => l.cut));
+    console.log("cutComps", cutComps);
+    console.log("simple_comp", simpleComps.map(d => d.map(d => d.comp)));
+
+    nodes.forEach(function(d) {
+      d.x = 300 + Math.random() * 200;
+      d.y = 100 + Math.random() * 200;
+      d.vx = d.vy = 0;
+    });
+
     for (var i = 0, n = Math.ceil(Math.log(simulation.alphaMin()) /
       -simulation.alphaDecay()); i < n; ++i) {
       simulation.tick();
@@ -449,6 +464,7 @@ function extractSets(data) {
 function initSets(data) {
   if (!data) return this._sets;
 
+  this._maxDepth = 3;
   var sets = extractSets(data);
   var setData = sets.values();
 
@@ -469,9 +485,9 @@ function initSets(data) {
 
   // this._bicomps = bicomps.map(g => g.map(i => setData[i]));
   this._cutEdges = edges.filter(l => {
-    return l.level % maxDepth === 0;
-
+    return l.level % this._maxDepth === 0;
   });
+
   this._fociLinks = edges;
     // .filter(e => cut_vertices.indexOf(e.target) === -1);
     // .concat(this._cutEdges);

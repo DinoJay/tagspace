@@ -94,7 +94,6 @@ var findByDepth = function(start, depth) {
 //   }
 // }
 
-
 function yield0(cur, nodes) {
   if (cur.children) {
     nodes.push(...cur.children);
@@ -220,44 +219,75 @@ function tagList(nodes, cont) {
       // nodes.length * barHeight + margin.top + margin.bottom);
 
     // Update the nodes…
-    var root = svg.selectAll("g.root")
+    var root = d3.select(".tag-list").select(".root")
         .data([rootDatum], d => d.key);
 
     var rootEnter = root.enter()
-      .insert("g", ":first-child")
+      .append("div")
         .attr("class", "root");
 
     rootEnter
-      .append("foreignObject", ":first-child")
-        .append("xhtml:input")
-        .on("focusin", function(d) {
-          console.log("focusin");
-          var input = d3.select(this).node().value;
-          if (input === "") {
-            d.oldSrc = _.cloneDeep(source);
-            console.log("empty", "oldSrc", d.oldSrc);
-            // update(d.oldSrc);
-          }
-        })
-        .on("focusout", function(d) {
+      .on("focusin", function(d) {
+        console.log("focusin");
+        var input = d3.select(this).node().value;
+        if (input === "") {
+          d.oldSrc = _.cloneDeep(source);
+          console.log("empty", "oldSrc", d.oldSrc);
+          // update(d.oldSrc);
+        }
+      })
+      .on("focusout", function(d) {
+        var input = d3.select(this).node().value;
+        if (input === "")
+          update(d.oldSrc);
 
-          var input = d3.select(this).node().value;
-          if (input === "")
-            update(d.oldSrc);
+        var maxDepth = d3.max(treeNodes.filter(n => n.children),
+          d => d.depth);
+        console.log("maxDepth", maxDepth);
+        var newSrc = findByDepth(source, maxDepth);
+        console.log("newSrc", newSrc);
+        newSrc.children = newSrc.children
+          .filter(d => d.key.includes(input));
 
-          var maxDepth = d3.max(treeNodes.filter(n => n.children), d => d.depth);
-          console.log("maxDepth", maxDepth);
-          var newSrc = findByDepth(source, maxDepth);
-          console.log("newSrc", newSrc);
-          newSrc.children = newSrc.children
-            .filter(d => d.key.includes(input));
+        newSrc.yScale = d3.scaleLinear()
+          .domain([1, d3.max(source.children, d => d.values.length)])
+          .range([10, source.height]);
 
-          newSrc.yScale = d3.scaleLinear()
-            .domain([1, d3.max(source.children, d => d.values.length)])
-            .range([10, source.height]);
+        update(source);
+      });
 
-          update(source);
-        });
+    // rootEnter
+    //   .append("foreignObject", ":first-child")
+    //     .append("xhtml:input")
+    //     .attr("type", "text")
+    //     .on("focusin", function(d) {
+    //       console.log("focusin");
+    //       var input = d3.select(this).node().value;
+    //       if (input === "") {
+    //         d.oldSrc = _.cloneDeep(source);
+    //         console.log("empty", "oldSrc", d.oldSrc);
+    //         // update(d.oldSrc);
+    //       }
+    //     })
+    //     .on("focusout", function(d) {
+    //
+    //       var input = d3.select(this).node().value;
+    //       if (input === "")
+    //         update(d.oldSrc);
+    //
+    //       var maxDepth = d3.max(treeNodes.filter(n => n.children), d => d.depth);
+    //       console.log("maxDepth", maxDepth);
+    //       var newSrc = findByDepth(source, maxDepth);
+    //       console.log("newSrc", newSrc);
+    //       newSrc.children = newSrc.children
+    //         .filter(d => d.key.includes(input));
+    //
+    //       newSrc.yScale = d3.scaleLinear()
+    //         .domain([1, d3.max(source.children, d => d.values.length)])
+    //         .range([10, source.height]);
+    //
+    //       update(source);
+    //     });
 
     rootEnter
         // .attr("y", d => -d.height / 2)
