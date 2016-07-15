@@ -149,21 +149,21 @@ function deriveSets(nodes) {
       var clone = _.cloneDeep(n);
       clone.tag = t;
       return clone;
-    }).filter(d => d.__key__ !== "root");
+    });
     return clones;
   }));
 
   var nested_data = d3.nest()
     .key(d => d.tag)
-    .entries(spread_data).filter(d => d.values.length > 1);
+    .entries(spread_data).filter(d => d.values.length > 0);
 
-  var uniq_nested_data = _.uniqWith(nested_data, (a, b) => {
-      var aKeys = a.values.map(d => d.__key__);
-      var bKeys = b.values.map(d => d.__key__);
-      return _.isEqual(aKeys, bKeys);
-  });
+  // var uniq_nested_data = _.uniqWith(nested_data, (a, b) => {
+  //     var aKeys = a.values.map(d => d.__key__);
+  //     var bKeys = b.values.map(d => d.__key__);
+  //     return _.isEqual(aKeys, bKeys);
+  // });
 
-  var groups = uniq_nested_data.map(g => {
+  var groups = nested_data.map(g => {
     g.id = g.key;
     return g;
   });
@@ -464,7 +464,7 @@ function extractSets(data) {
 function initSets(data) {
   if (!data) return this._sets;
 
-  this._maxDepth = 2;
+  this._maxDepth = 20;
   var sets = extractSets(data);
   var setData = sets.values();
 

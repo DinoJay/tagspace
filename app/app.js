@@ -741,7 +741,7 @@ function update(diigo, zoom, boundzoom, foci) {
       var srcSets = srcComp.sets.map(d => d.key);
       // var scomp = appliedComps.find(d => d.id === s.comp);
       // var sCompTags = tags
-      nodes.forEach((t, i)=> {
+      nodes.forEach(t => {
       var tgtComp = appliedComps.find(d => d.id === t.comp);
       if (tgtComp === undefined) return;
       var tgtSets = tgtComp.sets.map(d => d.key);
@@ -1052,7 +1052,7 @@ function update(diigo, zoom, boundzoom, foci) {
 }
 
 d3.json("diigo.json", function(error, data) {
-  var diigo = data.slice(0, 300).map((d, i) => {
+  var diigo = data.slice(0, 100).map((d, i) => {
     d.tags = d.tags.split(",");
     d.id = i;
     return d;
