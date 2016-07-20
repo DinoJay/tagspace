@@ -12,8 +12,8 @@ import * as d3 from "d3";
 //   .x(d => d.x)
 //   .y(d => d.y);
 
-function draw_marching_squares(callback, groups, isolevel = 0.0500,
-                                                          cell_size = 4) {
+function draw_marching_squares(callback, groups, isolevel = 0.024,
+                                                          cell_size = 5) {
   // var isolevel = 0.0250;
   var epsilon = 0.00000001;
   var grid = {
@@ -250,8 +250,7 @@ function draw_marching_squares(callback, groups, isolevel = 0.0500,
 
     // // TODO: no hover possible
     // d3.select(".bubble-cont")
-    //  .selectAll(".bubble-"+g.key)
-    //   .data(arrayOfArrays)
+    //  .selectAll(".bubble-"+g.key) .data(arrayOfArrays)
     //   .enter()
     //   .append("g")
     //   .attr("class", "bubble-"+g.key)
@@ -296,7 +295,8 @@ function draw_marching_squares(callback, groups, isolevel = 0.0500,
     }
 
    //or just take the evens to approximate the bubble
-    sortedBubblePoints = sortedBubblePoints.filter(function(x,i){
+    sortedBubblePoints = sortedBubblePoints
+      .filter(function(x,i){
       return (i%2 === 0);
     });
 

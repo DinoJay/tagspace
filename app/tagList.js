@@ -123,7 +123,7 @@ function reinsert(cur, key, children, nodeMap) {
 }
 
 
-function tagList(nodes, cont) {
+function tagList(nodes, cont, foci, mainUpdate) {
   var allTags = nodes.map(n => n.key);
 
   nodes.forEach(n => {
@@ -200,7 +200,7 @@ function tagList(nodes, cont) {
     // Compute the flattened node list. TODO use d3.layout.hierarchy.
     var treeNodes = tree.nodes(source);//_.orderBy(tree.nodes(source), d => d.values.length, "desc");
     var rootDatum = treeNodes.find(d => d.depth === 0);
-    console.log("rootDatum", rootDatum);
+    // console.log("rootDatum", rootDatum);
     var nodes = treeNodes.filter(d => d.depth > 0);
 
     nodes.forEach(n => {
@@ -313,34 +313,34 @@ function tagList(nodes, cont) {
       .on("click", click)
       .on("mouseover", d => {
 
-        var tp = d3.selectAll(".tps").filter(e => {
-          // console.log("ET", d.key, e, e.tags.find(a => a.key === d.key));
-          // return e.tags.indexOf(d.key) !== -1;
-          return e.tags.find(a => a.key === d.key) ? true : false;
-        });
-
-        var toRem = tp.selectAll("tspan").filter(e => {
-          // console.log("tspan data", e, e.key !== d.key);
-          return e.key !== d.key;
-        });
-
-        toRem.remove();
-
-        console.log("toRem", toRem);
-        // tp.data([d.key]);
-        // var others = d3.selectAll(".tagLabel").filter(e => e.key !== d.key);
-        // others.style("opacity", 0.3);
-        // d.prevSize = parseInt(tp.attr("font-size"));
-
-        console.log("tp", tp);
+        // var tp = d3.selectAll(".tps").filter(e => {
+        //   // console.log("ET", d.key, e, e.tags.find(a => a.key === d.key));
+        //   // return e.tags.indexOf(d.key) !== -1;
+        //   return e.tags.find(a => a.key === d.key) ? true : false;
+        // });
+        //
+        // var toRem = tp.selectAll("tspan").filter(e => {
+        //   // console.log("tspan data", e, e.key !== d.key);
+        //   return e.key !== d.key;
+        // });
+        //
+        // toRem.remove();
+        //
+        // console.log("toRem", toRem);
+        // // tp.data([d.key]);
+        // // var others = d3.selectAll(".tagLabel").filter(e => e.key !== d.key);
+        // // others.style("opacity", 0.3);
+        // // d.prevSize = parseInt(tp.attr("font-size"));
+        //
+        // console.log("tp", tp);
       })
       .on("mouseout", d => {
-        console.log("d", d);
-        d3.selectAll(".tagLabel").filter(e => e.key === d.key)
-          .attr("font-size", d.prevSize);
-
-        d3.selectAll(".tagLabel").filter(e => e.key !== d.key)
-          .style("opacity", 1);
+        // console.log("d", d);
+        // d3.selectAll(".tagLabel").filter(e => e.key === d.key)
+        //   .attr("font-size", d.prevSize);
+        //
+        // d3.selectAll(".tagLabel").filter(e => e.key !== d.key)
+        //   .style("opacity", 1);
 
       });
 
@@ -462,6 +462,7 @@ function tagList(nodes, cont) {
   // Toggle children on click.
   function click(d) {
     var nbs;
+    var newState;
     if (d.children) {
       d.path.pop();
       console.log("D:PATH", d.path);
@@ -469,18 +470,32 @@ function tagList(nodes, cont) {
       var succs = [];
       var clonedChilds = _.cloneDeep(d.children);
       d.children = [];
-      reinsert(d.parent, d.key, clonedChilds.concat(yield0(d, succs)), nodeMap);
+      reinsert(d.parent, d.key, clonedChilds.concat(yield0(d, succs)),
+        nodeMap);
       update(root);
+
+      console.log("d.path", d.path);
+      foci.sets(d.path)
+          .start();
+
+      newState = {first: false};
+      mainUpdate(foci, {search: false, main: true, cloud: true}, newState);
     } else {
       d.path = _.uniq(d.path.concat(d.parent.path, [d.key]));
       nbs = nbs_map(d, nodeMap);
 
       d.children = nbs;
-      var children_ids = nbs.map(d => d.key);
+      // var children_ids = nbs.map(d => d.key);
       // d.old_children = d._children;
-      console.log("children_ids", children_ids);
       traverse(root, d.key, nbs.map(d => d.key));
       update(root);
+
+      console.log("d.path", d.path);
+      foci.sets(d.path)
+          .start();
+
+      newState = {first: false};
+      mainUpdate(foci, {search: false, main: true, cloud: true}, newState);
     }
   }
 
@@ -497,3 +512,5 @@ function tagList(nodes, cont) {
 
 }
 export default tagList;
+
+

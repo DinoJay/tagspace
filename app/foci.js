@@ -7,6 +7,7 @@ console.log("d3_force", d3_force);
 var isCutEdge = (l, nodes, linkedByIndex, maxDepth) => {
   var tgt = nodes[l.target];
   var targetDeg = outLinks(tgt, nodes, linkedByIndex).length;
+  //
   return l.level % maxDepth === 0 && targetDeg > 0;
 };
 
@@ -35,7 +36,7 @@ var collide = function(nodes) {
                 r = d.r + quad.data.r;
 
             if (l < r) {
-              l = (l - r) / l * alpha;
+              l = (l - r) / l * (alpha * 0.075);
               d.x -= x *= l;
               d.y -= y *= l;
               quad.data.x += x;
@@ -72,8 +73,8 @@ function simple_comp(nodes, links) {
   // console.log("edgeList", edgeList);
 
   var adjlist = convert_edgelist_to_adjlist(vertices, edgeList);
-  console.log("adjList", adjlist, adjlist.length, "vertices", vertices,
-  vertices.length);
+  // console.log("adjList", adjlist, adjlist.length, "vertices", vertices,
+  // vertices.length);
 
   for (v in adjlist) {
     if (adjlist.hasOwnProperty(v) && !visited[v]) {
@@ -157,13 +158,16 @@ function deriveSets(nodes) {
     .key(d => d.tag)
     .entries(spread_data).filter(d => d.values.length > 0);
 
-  // var uniq_nested_data = _.uniqWith(nested_data, (a, b) => {
-  //     var aKeys = a.values.map(d => d.__key__);
-  //     var bKeys = b.values.map(d => d.__key__);
-  //     return _.isEqual(aKeys, bKeys);
-  // });
+  var uniq_nested_data = _.uniqWith(nested_data, (a, b) => {
+      var aKeys = a.values.map(d => d.__key__);
+      var bKeys = b.values.map(d => d.__key__);
+      return _.isEqual(aKeys, bKeys);
+  });
 
-  var groups = nested_data.map(g => {
+  // console.log("nested_data length", nested_data.length,
+    // "uniq_nested_data", uniq_nested_data.length);
+
+  var groups = uniq_nested_data.map(g => {
     g.id = g.key;
     return g;
   });
@@ -192,6 +196,8 @@ function deriveSets(nodes) {
 function start() {
 
   function runForce(nodes, links, that) {
+
+    console.log("NODes", nodes);
         // .on("tick", ticked);
     // console.log("CLOned LINX", _.cloneDeep(links));
 
@@ -202,7 +208,7 @@ function start() {
     links.forEach(function(l) {
       linkedByIndex[l.source + "," + l.target] = l;
     });
-
+    console.log("links", links);
     var labelNodes = _.flatten(nodes.filter(n => isParent(n, linkedByIndex))
         .map(n => {
           var links = outLinks(n, nodes, linkedByIndex);
@@ -212,9 +218,10 @@ function start() {
               id: n.__key__ + "label ", //+ s,
               // index: nodes.length + index,
               label: true,
-              text: interSet.join(", "), //s,
+              text: "",// interSet.join(", "), //s,
               interSet: interSet,
               tags: interSet,
+              sets: interSet,
               parent: n
             };
             // index += 1;
@@ -230,12 +237,13 @@ function start() {
         source: n.parent.index,
         target: n.index,
         cut: false,
-        strength: 1
+        strength: 1,
+        label: true
       };
     });
 
-    nodes.push(...labelNodes);
-    links.push(...labelLinks);
+    // nodes.push(...labelNodes);
+    // links.push(...labelLinks);
 
     linkedByIndex = {};
     links.forEach(function(l) {
@@ -248,42 +256,32 @@ function start() {
       n.inLinks = inLinks(n, nodes, linkedByIndex);
     });
 
+    console.log("sim start", "links", links);
     links.forEach(l => {
       if (isCutEdge(l, nodes, linkedByIndex, that._maxDepth))
         l.cut = true;
       else l.cut = false;
+      // l.cut = false;
     });
 
     var simulation = d3_force.forceSimulation(nodes)
-      // .force("charge", d3_force.forceManyBody()
-      //                     // scale: 40, 40 * 3,
-      //                    .strength(0)
-      //                    // .distanceMin(9)
-      //                    .distanceMax(50)
-      // )
-
-      // .force("x", d3_force.forceX(500)
-      //   .strength(0.5)
-      // )
-      // .force("y", d3_force.forceY(300)
-      //   .strength(0.5)
-      // )
-      // TODO: encapsulate in function
+      // .force("charge", d3.forceManyBody())
       .force("link", d3_force.forceLink()
                .distance(l => l.target.label ? 1 : l.cut ? 100 : 9)
                .strength(l => {
-                 var def = 1 / Math.min(l.source.outLinks.length, l.target.outLinks.length);
+                 var def = 0.6 / Math.min(l.source.outLinks.length,
+                   l.target.outLinks.length);
                  return l.cut ? def : 1;
-               })
-               .iterations(4))
+               }))
       // .force("position", d3_force.forcePosition());
-      .force("collide", d3_force.forceCollide(d => d.label ? 0 : 7))
+      .force("collide", d3_force.forceCollide(() => 7))
       // .force("specialCollide", (alpha) => {
       //   var quadtree = d3.geom.quadtree(nodes);
       //   collide2(alpha, nodes, quadtree);
       // })
       .force("intraCollide", collide(nodes))
       .force("center", d3_force.forceCenter(...center));
+      // .alphaMin(0.4);
 
     simulation.nodes(nodes);
     simulation.force("link").links(links);
@@ -293,7 +291,7 @@ function start() {
     // that._groups = deriveSets(comps);
 
     // TODO: dirty hack
-    that._sets = nodes;
+    that._setNodes = nodes;
 
     that._reducedEdges = links.filter(l => !l.cut);
     // that._cutEdges = links.filter(l => l.cut);
@@ -305,7 +303,6 @@ function start() {
     var comps = simpleComps.map((g, i) => {
       var id = i + "comp";
       var compNodes = _.flatten(g.map(d => d.nodes)).filter(d => d);
-      // console.log("compNodes", compNodes);
       compNodes.forEach(cn => {
         nodes.forEach(n => {
           if (cn.__setKey__ === n.__key__) {
@@ -336,10 +333,10 @@ function start() {
       };
     });
 
-
-    var cutComps = simple_comp(nodes, links.filter(l => l.cut));
-    console.log("cutComps", cutComps);
-    console.log("simple_comp", simpleComps.map(d => d.map(d => d.comp)));
+    console.log("no comp nodes", nodes.filter(n => !n.comp));
+    // var cutComps = simple_comp(nodes, links.filter(l => l.cut));
+    // console.log("cutComps", cutComps);
+    // console.log("simple_comp", simpleComps.map(d => d.map(d => d.comp)));
 
     nodes.forEach(function(d) {
       d.x = 300 + Math.random() * 200;
@@ -347,11 +344,11 @@ function start() {
       d.vx = d.vy = 0;
     });
 
+    // for (var i = 0, n = 50; i < n; ++i) {
     for (var i = 0, n = Math.ceil(Math.log(simulation.alphaMin()) /
       -simulation.alphaDecay()); i < n; ++i) {
       simulation.tick();
     }
-    console.log("LINX", links.map(l => l.strength));
 
     that._comps = comps;
 
@@ -461,34 +458,81 @@ function extractSets(data) {
   return sets;
 }
 
-function initSets(data) {
-  if (!data) return this._sets;
+function initSets(arg) {
+  if (!arg) return this._setNodes;
 
-  this._maxDepth = 20;
-  var sets = extractSets(data);
-  var setData = sets.values();
+  var setData;
+  if (this._sets) {
+    // setData = this._sets.values()
+    //   .filter(d => _.intersection(d.sets, arg).length === arg.length);
 
-  var {nodes, edges} = prepareGraph(this, setData);
+    if (arg.length > 0) {
+      var oldEdges = this._cachedGraph.edges.filter(l => {
+        var boolA = _.intersection(l.source.sets, arg).length === arg.length;
+        var boolB = _.intersection(l.target.sets, arg).length === arg.length;
+        return boolA && boolB;
+      });
+      var nodes = this._cachedGraph.nodes
+          .filter(n => _.intersection(n.sets, arg).length === arg.length);
+      // var nodes = nodeSet.values();
+    } else {
+      oldEdges = this._cachedGraph.edges;
+      nodes = this._cachedGraph.nodes;
+    }
+
+    var edges = [];
+    oldEdges.forEach(l => {
+      var src = nodes.findIndex(n => n.__key__ === l.source.__key__);
+      var tgt = nodes.findIndex(n => n.__key__ === l.target.__key__);
+      edges.push({
+                  source: src,
+                  target: tgt
+                });
+    });
+
+    console.log("oldEdges", oldEdges);
+    console.log("edges", edges);
+
+    this._cutEdges = edges.filter(l => {
+      return l.level % this._maxDepth === 0;
+    });
+
+    this._setNodes = nodes;
+    this._fociLinks = edges;
+
+    // edges.forEach(function(l) {
+    //   linkedByIndex[l.source.index + "," + l.target.index] = l;
+    // });
+  }
+  else {
+    this._sets = extractSets(arg);
+    setData = this._sets.values();
+    var graph = prepareGraph(this, setData);
+    this._cachedGraph = graph;
+
+    this._setNodes = graph.nodes;
+    var linkedByIndex = {};
+    graph.edges.forEach(function(l) {
+      linkedByIndex[l.source + "," + l.target] = l;
+    });
+
+    // this._reducedEdges = edges.filter(l => {
+    //   // return l.level % maxDepth !== 0;// || targetDeg === 0;
+    //   return !isCutEdge(l, nodes, linkedByIndex);
+    // });
+    // console.log("Biconnected COmps", bicomps);
+
+    // this._bicomps = bicomps.map(g => g.map(i => setData[i]));
+    this._cutEdges = graph.edges.filter(l => {
+      return l.level % this._maxDepth === 0;
+    });
+
+    this._fociLinks = graph.edges;
+  }
+  // console.log("sets", this._sets.values());
+
   // console.log("EDGES", edges);
 
-  this._sets = nodes;
-  var linkedByIndex = {};
-  edges.forEach(function(l) {
-    linkedByIndex[l.source + "," + l.target] = l;
-  });
-
-  // this._reducedEdges = edges.filter(l => {
-  //   // return l.level % maxDepth !== 0;// || targetDeg === 0;
-  //   return !isCutEdge(l, nodes, linkedByIndex);
-  // });
-  // console.log("Biconnected COmps", bicomps);
-
-  // this._bicomps = bicomps.map(g => g.map(i => setData[i]));
-  this._cutEdges = edges.filter(l => {
-    return l.level % this._maxDepth === 0;
-  });
-
-  this._fociLinks = edges;
     // .filter(e => cut_vertices.indexOf(e.target) === -1);
     // .concat(this._cutEdges);
     // .filter(e => crop_edges.find(c => c.source === e.source && c.target === e.target) ? false : true);
@@ -596,7 +640,11 @@ function prepareGraph(that, setData) {
 
           sorted.forEach(v => {
             if (G.vertices.indexOf(v) !== -1) {
-              var filterOut = G.edges.filter(l => l.target === v);
+              var filterOut = G.edges.filter(l => {
+                var tgtNode = nodes[l.target];
+                // console.log("tgtNodes", tgtNodes);
+                return l.target === v;
+              });
               // TODO:
               // console.log("filterOut", filterOut);
               G.edges = _.difference(G.edges, filterOut);
@@ -819,6 +867,7 @@ const d3Foci = function() {
   return {
     _sets: null,
     _data: null,
+    _maxDepth: 2,
     _charge: () => -30,
     _size: [1, 1],
     _fociLinks: null,
@@ -854,9 +903,6 @@ const d3Foci = function() {
   };
 };
 
-export
-default
-
-function() {
+export default function() {
   return new d3Foci;
 }

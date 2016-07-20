@@ -1,4 +1,5 @@
 import * as d3 from "d3";
+import rectCollide from "./utils.js";
 // import brewer from "colorbrewer";
 // import _ from "lodash";
 // import d3_hierarchy from "d3-hierarchy";
@@ -73,59 +74,6 @@ var margin = {left: 100, right: 50, top: 0, bottom: 50};
 var bundleLine = d3.line();
             // .curve(d3.curveStepAfter);
 
-function rectCollide(nodes, strength) {
-  return function(alpha) {
-    var quadtree = d3.quadtree()
-                     .x(d => d.x)
-                     .y(d => d.y)
-                     .addAll(nodes);
-    var padding = 6;
-
-    for (var i = 0, n = nodes.length; i < n; ++i) {
-      var node = nodes[i];
-      quadtree.visit(function(quad, x1, y1, x2, y2) {
-
-        if (quad.data && (quad.data !== node)) {
-          var x = node.x - quad.data.x,
-            y = node.y - quad.data.y,
-            xSpacing = (quad.data.width + node.width) / 2,
-            ySpacing = (quad.data.height + node.height + padding) / 2,
-            absX = Math.abs(x),
-            absY = Math.abs(y),
-            l,
-            lx,
-            ly;
-
-          // console.log("Node quad", node.width, node.height);
-
-          if (absX < xSpacing && absY < ySpacing) {
-            l = Math.sqrt(x * x + y * y);
-
-            lx = (absX - xSpacing) / l;
-            ly = (absY - ySpacing) / l;
-
-            // the one that"s barely within the bounds probably triggered the collision
-            if (Math.abs(lx) > Math.abs(ly)) {
-              lx = 0;
-            } else {
-              ly = 0;
-            }
-
-            x *= lx * alpha * strength;
-            y *= ly * alpha * strength;
-
-            node.vx -= x;
-            node.vy -= y;
-            quad.data.vx += x;
-            quad.data.vy += y;
-
-            // updated = true;
-          }
-        }
-      });
-    }
-  };
-}
 
 function prepareData(rawData, time) {
 
@@ -362,7 +310,7 @@ function update(props, state) {
                 return "translate(" + [d.x - d.width / 2, d.y - d.height / 2] + ")";
               });
 
-            tagEnterG.select("rect").style("fill", "#8ac4ff");
+            // tagEnterG.select("rect").style("fill", "#8ac4ff");
 
             // tag
             //   .attr("transform", d => {
@@ -428,36 +376,6 @@ function update(props, state) {
 
   // }
   }
-}
-
-function slider(g) {
-
-  var margin = {right: 50, left: 20, top: 20};
-
-  var height = 200;
-
-  var r = 10;
-
-
-  // g.attr("transform", "translate(" + [margin.left, (height - margin.bottom)  / 2] + ")");
-  //
-  // console.log("d3 scale month", y.domain());
-  // var sliderG = g.append("g")
-  //     .attr("class", "slider")
-  //     .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-  //
-  // console.log("domain", y.domain());
-  //
-  // sliderG.selectAll(".date-bubble")
-  //  .data(y.domain())
-  //  .enter()
-  //  .append("rect")
-  //  .attr("x", margin.left + r/2)
-  //  .attr("y", d => dbg(y(d)))
-  //  .attr("width", 20)
-  //  .attr("height", 20)
-  //  .attr("fill", "blue");
-
 }
 
 export default create;
