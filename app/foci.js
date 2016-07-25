@@ -2,12 +2,12 @@
 import * as d3 from "d3";
 import _ from "lodash";
 import * as d3_force from "d3-force";
-console.log("d3_force", d3_force);
+import {parseTime} from "./utils.js";
 
 var isCutEdge = (l, nodes, linkedByIndex, maxDepth) => {
   var tgt = nodes[l.target];
   var targetDeg = outLinks(tgt, nodes, linkedByIndex).length;
-  //
+  // console.log("modulo", l.level, maxDepth, l.level % maxDepth);
   return l.level % maxDepth === 0 && targetDeg > 0;
 };
 
@@ -21,7 +21,7 @@ var collide = function(nodes) {
       for (var i = 0, n = nodes.length; i < n; ++i) {
         var d = nodes[i];
         // TODO: adopt to size of diigo
-        d.r = 70;
+        d.r = 100;
         var nx1 = d.x - d.r,
           nx2 = d.x + d.r,
           ny1 = d.y - d.r,
@@ -36,7 +36,7 @@ var collide = function(nodes) {
                 r = d.r + quad.data.r;
 
             if (l < r) {
-              l = (l - r) / l * (alpha * 0.075);
+              l = (l - r) / l * (alpha * 0.035);
               d.x -= x *= l;
               d.y -= y *= l;
               quad.data.x += x;
@@ -197,59 +197,25 @@ function start() {
 
   function runForce(nodes, links, that) {
 
-    console.log("NODes", nodes);
-        // .on("tick", ticked);
-    // console.log("CLOned LINX", _.cloneDeep(links));
-
-    // console.log("force Nodes", nodes);
+    console.log("NODes", nodes, "LinKs", links);
     var center = that._size.map(d => d/2);
 
     var linkedByIndex = {};
     links.forEach(function(l) {
       linkedByIndex[l.source + "," + l.target] = l;
     });
-    console.log("links", links);
-    var labelNodes = _.flatten(nodes.filter(n => isParent(n, linkedByIndex))
-        .map(n => {
-          var links = outLinks(n, nodes, linkedByIndex);
-          var interSet = links[0].interSet;
-          // return interSet.map(s => {
-            return {
-              id: n.__key__ + "label ", //+ s,
-              // index: nodes.length + index,
-              label: true,
-              text: "",// interSet.join(", "), //s,
-              interSet: interSet,
-              tags: interSet,
-              sets: interSet,
-              parent: n
-            };
-            // index += 1;
-          // });
-        }));
 
+    console.log("linkedByIndex", linkedByIndex);
 
-    labelNodes.forEach((d, i) => d.index = nodes.length + i);
+    // linkedByIndex = {};
+    // links.forEach(function(d) {
+    //   var src = d.source.index ? d.source.index : d.source;
+    //   var tgt = d.target.index ? d.target.index : d.target;
+    //   linkedByIndex[src + "," + tgt] = true;
+    // });
 
-    // console.log("LABELNODES", labelNodes);
-    var labelLinks = labelNodes.map(n => {
-      return {
-        source: n.parent.index,
-        target: n.index,
-        cut: false,
-        strength: 1,
-        label: true
-      };
-    });
-
-    // nodes.push(...labelNodes);
-    // links.push(...labelLinks);
-
-    linkedByIndex = {};
-    links.forEach(function(l) {
-      linkedByIndex[l.source + "," + l.target] = l;
-    });
-
+    console.log("linkedByIndex Force", linkedByIndex);
+    console.log("nodes Force", nodes.map(d => d.index));
     nodes.forEach(n => {
       n.parent = getParent(n, linkedByIndex, nodes);
       n.outLinks = outLinks(n, nodes, linkedByIndex);
@@ -258,20 +224,20 @@ function start() {
 
     console.log("sim start", "links", links);
     links.forEach(l => {
-      if (isCutEdge(l, nodes, linkedByIndex, that._maxDepth))
-        l.cut = true;
-      else l.cut = false;
-      // l.cut = false;
+      l.cut = isCutEdge(l, nodes, linkedByIndex, that._maxDepth);
     });
+    console.log("cutEdges", links.filter(l => l.cut));
 
     var simulation = d3_force.forceSimulation(nodes)
       // .force("charge", d3.forceManyBody())
       .force("link", d3_force.forceLink()
                .distance(l => l.target.label ? 1 : l.cut ? 100 : 9)
                .strength(l => {
-                 var def = 0.6 / Math.min(l.source.outLinks.length,
-                   l.target.outLinks.length);
-                 return l.cut ? def : 1;
+                 // var maxLen = Math.min(l.source.outLinks.length,
+                 //   l.target.outLinks.length);
+                 // console.log("1/maxLen", maxLen);
+                 return l.cut ? 0.5 : 1;
+                 // return 1;
                }))
       // .force("position", d3_force.forcePosition());
       .force("collide", d3_force.forceCollide(() => 7))
@@ -407,7 +373,6 @@ function extractSets(data) {
     return d.__key__;
   });
 
-
   var individualSets = d3.map(),
     set,
     key,
@@ -458,70 +423,67 @@ function extractSets(data) {
   return sets;
 }
 
-function initSets(arg) {
+function initSets(arg, union) {
   if (!arg) return this._setNodes;
 
   var setData;
   if (this._sets) {
-    // setData = this._sets.values()
-    //   .filter(d => _.intersection(d.sets, arg).length === arg.length);
+    var filterFunc;
+    if (!union) {
+      filterFunc = n => _.intersection(n.sets, arg).length === arg.length;
+    }
+    else {
+      filterFunc = n => _.intersection(n.sets, arg).length > 0;
+    }
 
-    if (arg.length > 0) {
-      var oldEdges = this._cachedGraph.edges.filter(l => {
-        var boolA = _.intersection(l.source.sets, arg).length === arg.length;
-        var boolB = _.intersection(l.target.sets, arg).length === arg.length;
-        return boolA && boolB;
-      });
-      var nodes = this._cachedGraph.nodes
-          .filter(n => _.intersection(n.sets, arg).length === arg.length);
-      // var nodes = nodeSet.values();
-    } else {
-      oldEdges = this._cachedGraph.edges;
-      nodes = this._cachedGraph.nodes;
+    var nodes = this._cachedGraph.nodes
+        .filter(filterFunc);
+
+    if (this._timerange) {
+      var st = this._timerange[0];
+      var et = this._timerange[1];
+      nodes = nodes.reduce((acc, d) => {
+        var nodes = d.nodes.filter(n => n.date >= st && n.date <= et);
+        if (nodes.length > 0) {
+          d.nodes = nodes;
+          acc.push(d);
+        }
+        return acc;
+      }, []);
+      this._timerange = null;
     }
 
     var edges = [];
-    oldEdges.forEach(l => {
+    this._cachedGraph.edges.forEach(l => {
       var src = nodes.findIndex(n => n.__key__ === l.source.__key__);
       var tgt = nodes.findIndex(n => n.__key__ === l.target.__key__);
-      edges.push({
-                  source: src,
-                  target: tgt
-                });
+      if (src !== -1 && tgt !== -1)
+        edges.push({
+                    source: src,
+                    target: tgt,
+                    level: l.level
+                  });
     });
 
-    console.log("oldEdges", oldEdges);
+    // console.log("oldEdges", oldEdges);
     console.log("edges", edges);
+
+    this._setNodes = nodes;
+    this._fociLinks = edges;
 
     this._cutEdges = edges.filter(l => {
       return l.level % this._maxDepth === 0;
     });
 
-    this._setNodes = nodes;
-    this._fociLinks = edges;
-
-    // edges.forEach(function(l) {
-    //   linkedByIndex[l.source.index + "," + l.target.index] = l;
-    // });
   }
   else {
-    this._sets = extractSets(arg);
+    var data = arg;
+    data.forEach(d => d.date = parseTime(d.created_at));
+    this._sets = extractSets(data);
     setData = this._sets.values();
     var graph = prepareGraph(this, setData);
     this._cachedGraph = graph;
-
     this._setNodes = graph.nodes;
-    var linkedByIndex = {};
-    graph.edges.forEach(function(l) {
-      linkedByIndex[l.source + "," + l.target] = l;
-    });
-
-    // this._reducedEdges = edges.filter(l => {
-    //   // return l.level % maxDepth !== 0;// || targetDeg === 0;
-    //   return !isCutEdge(l, nodes, linkedByIndex);
-    // });
-    // console.log("Biconnected COmps", bicomps);
-
     // this._bicomps = bicomps.map(g => g.map(i => setData[i]));
     this._cutEdges = graph.edges.filter(l => {
       return l.level % this._maxDepth === 0;
@@ -529,14 +491,6 @@ function initSets(arg) {
 
     this._fociLinks = graph.edges;
   }
-  // console.log("sets", this._sets.values());
-
-  // console.log("EDGES", edges);
-
-    // .filter(e => cut_vertices.indexOf(e.target) === -1);
-    // .concat(this._cutEdges);
-    // .filter(e => crop_edges.find(c => c.source === e.source && c.target === e.target) ? false : true);
-  // this._allLinks = edges;
 
   return this;
 }
@@ -577,7 +531,9 @@ function prepareGraph(that, setData) {
 
   var linkedByIndex = {};
   fociLinks.forEach(function(d) {
-    linkedByIndex[d.source + "," + d.target] = true;
+    var src = d.source.index ? d.source.index : d.source;
+    var tgt = d.target.index ? d.target.index : d.target;
+    linkedByIndex[src + "," + tgt] = true;
   });
 
   // console.log("linkedByIndex", linkedByIndex);
@@ -641,9 +597,9 @@ function prepareGraph(that, setData) {
           sorted.forEach(v => {
             if (G.vertices.indexOf(v) !== -1) {
               var filterOut = G.edges.filter(l => {
-                var tgtNode = nodes[l.target];
+                // var tgtNode = nodes[l.target];
                 // console.log("tgtNodes", tgtNodes);
-                return l.target === v;
+                return l.target === v; //&& tgtNode.nodes.length > 1;
               });
               // TODO:
               // console.log("filterOut", filterOut);
@@ -767,6 +723,7 @@ function connections(a) {
 
 function outLinks(a, nodes, linkedByIndex) {
   var links = [];
+  // if (!a.index) console.log("aindex", a);
   for (var property in linkedByIndex) {
     var s = property.split(",");
     if ((s[0] == a.index) && linkedByIndex[property])
@@ -867,7 +824,7 @@ const d3Foci = function() {
   return {
     _sets: null,
     _data: null,
-    _maxDepth: 2,
+    _maxDepth: 3,
     _charge: () => -30,
     _size: [1, 1],
     _fociLinks: null,
@@ -884,6 +841,10 @@ const d3Foci = function() {
 
     linkDistance: linkDistance,
     linkStrength: linkStrength,
+    timerange: function(timerange) {
+      this._timerange = timerange;
+      return this;
+    },
     charge: charge,
     size: size,
     data: getData,

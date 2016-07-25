@@ -244,7 +244,7 @@ function draw_marching_squares(callback, groups, isolevel = 0.024,
     var arrayOfArrays = splitSortedBubblePoints(sortedBubblePoints);
 
     g.path = arrayOfArrays;
-    g.allTags = _.uniq(_.flatten(g.values.map(d => d.tags)));
+    g.interTags = _.intersection(...g.values.map(d => d.tags));
     callback(g);
     // d3.select(".bubble-cont").selectAll(".bubble-"+g.key).remove();
 

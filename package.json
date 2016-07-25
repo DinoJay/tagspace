@@ -33,6 +33,7 @@
     "d3-hierarchy": "^1.0.0",
     "d3-scale": "^1.0.0",
     "d3-time-format": "^2.0.0",
+    "d3-tip": "^0.6.7",
     "jquery": "^2.2.0",
     "lodash": "^4.0.1"
   },

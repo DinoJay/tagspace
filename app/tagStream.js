@@ -1,7 +1,7 @@
 import * as d3 from "d3";
-import rectCollide from "./utils.js";
+import {rectCollide, parseTime} from "./utils.js";
 // import brewer from "colorbrewer";
-// import _ from "lodash";
+import _ from "lodash";
 // import d3_hierarchy from "d3-hierarchy";
 // import * as d3_force from "d3-force";
 
@@ -10,9 +10,17 @@ import rectCollide from "./utils.js";
 // var timeMap = d3.map({day: d3.timeDay, month: d3.timeMonth, year: d3.timeYear})
 //
 //
+
 var colors = ["#66cdff","#79c8ff","#8ac4ff","#9bbdff","#a7b8ff","#b3b3ff","#beaeff","#c9a7ff"];
 // d3.scaleThreshold()
 //     .range();
+
+function findCur(cur, key) {
+  if (cur.key === key)
+    return cur;
+  if (cur.children)
+    return cur.children.map(c => findCur(c, key));
+}
 
 function styleAxis(self) {
     self.selectAll("text")
@@ -45,12 +53,18 @@ function pushNewData(props, state, nextTimeFormat) {
       old.date = d.date;
       old.key = d.key;
       old.values = d.values;
-      // old.vy = d.vy;
-      // old.vx = d.vx;
       old.marked = true;
-    } else acc.push(d);
+    } else {
+      d.marked = true;
+      acc.push(d);
+    }
     return acc;
   }, []);
+
+  _.remove(state.simData, d => !d.marked);
+  var clickedKeys = pushData.filter(d => d.clicked).map(d => d.tagKey);
+  console.log("clickedKeys", clickedKeys);
+  pushData.forEach(d => d.clicked = clickedKeys.includes(d.tagKey));
   state.simData.push(...pushData);
   state.simData.forEach(d => d.marked = false);
 }
@@ -63,7 +77,6 @@ const timeFormatMap = d3.map({
 }, d => d.key);
 
 var format = d3.timeFormat("%Y/%m/%d %H:%M:%S %Z");
-var parseTime = d3.timeParse("%Y/%m/%d %H:%M:%S %Z");
 
 var color = d3.scaleOrdinal().range(colors);
 
@@ -110,7 +123,11 @@ var dbg = d => {
 };
 
 
-function create(data, cont) {
+function create(data, foci, cont, mainUpd, tagList) {
+  cont.selectAll("*").remove();
+  console.log("TAGLIST", tagList);
+
+  data.forEach(d => d.clicked = false);
   cont
     .append("div")
     .attr("class", "view-name")
@@ -180,6 +197,9 @@ function create(data, cont) {
     simData: initTags,
     k: 1
   };
+  state.update = mainUpd;
+  state.tagList = tagList;
+  state.foci = foci;
   update(props, state);
 }
 
@@ -224,15 +244,15 @@ function update(props, state) {
                .translateExtent([[-50, -50], [width, height]])
                .duration(1000)
                .on("zoom", zoomed))
-               .on("dblclick.zoom", null);
+               .on("dblclick.zoom", null)
+               .on("click.zoom", null);
 
   var gTag = mainG.select("g.tags");
            // .attr("transform", "translate(" + [0, margin.top] + ")");
 
-  var gAxis = d3.select(".x.axis")
+  d3.select(".x.axis")
     .call(xAxis)
     .call(styleAxis);
-
 
   var tag = gTag.selectAll(".tag")
     .data(simulation.nodes(), d => d.key);
@@ -241,8 +261,8 @@ function update(props, state) {
     .append("g")
     .attr("class", "tag");
 
-  tagEnterG.append("rect")
-    .style("opacity", 0.3);
+  tagEnterG.append("rect");
+    // .style("opacity", 0.3);
 
   tagEnterG.append("text")
     .text(d => d.tagKey);
@@ -250,6 +270,8 @@ function update(props, state) {
   tag.exit().remove();
 
   var tagEnterUpdate = tagEnterG.merge(tag);
+
+  tagEnterUpdate.select("rect").attr("fill", d => d.clicked ? "yellow" : "white");
 
   tagEnterUpdate.style("font-size", d => wordScale(d.size) + "px");
 
@@ -261,20 +283,53 @@ function update(props, state) {
       d.height = bbox.height;
     })
     .on("click", function(d) {
-      console.log("time link", d);
-      var timeLink = d3.select("g.tags").selectAll(".time-link")
-                      .data(d.values)
-                      .enter()
-                      .insert("path", ":first-child")
-                      .attr("stroke", "red")
-                      .attr("fill", "none")
-                      .attr("d", e => {
-                        var a = [
-                          [d.x, d.y],
-                          [xScale(e.date), height - margin.bottom]
-                        ];
-                        return bundleLine(a);
-                      });
+      var rect = d3.select(this.parentNode).select("rect");
+
+      var tl = state.tagList;
+      if (!d.clicked) {
+        d.clicked = true;
+        console.log("time link", d);
+        // TODO
+        rect.attr("fill", "rgb(255, 165, 0)");
+        // var timeLink = d3.select("g.tags").selectAll(".time-link")
+        //                 .data(d.values)
+        //                 .enter()
+        //                 .insert("path", ":first-child")
+        //                 .attr("stroke", "red")
+        //                 .attr("fill", "none")
+        //                 .attr("d", e => {
+        //                   var a = [
+        //                     [d.x, d.y],
+        //                     [xScale(e.date), height - margin.bottom]
+        //                   ];
+        //                   return bundleLine(a);
+        //                 });
+
+        var newState = {first: false};
+
+        var t1 = time.format.offset(d.date, 1);
+
+        state.foci
+          .timerange([d.date, t1]);
+
+        console.log("d", d);
+        var n = d3.selectAll(".node").filter(e => e.key === d.tagKey)
+            .data()[0];
+        tl._click(n);
+
+      } else {
+        d.clicked = false;
+        state.foci
+          .timerange(null);
+
+        var nn = d3.selectAll(".node").filter(e => e.key === d.tagKey)
+            .data()[0];
+        tl._click(nn);
+
+        rect.attr("fill", null);
+
+      }
+
     });
 
     tagEnterUpdate.select("text")
@@ -300,6 +355,7 @@ function update(props, state) {
           .force("y", d3.forceY(height / 2).strength(0.1))
           .force("x", d3.forceX(d => xScale(d.date)).strength(0.3))
           .force("collide", rectCollide(simulation.nodes(), 6))
+
           .on("tick", () => {
             // rect
             //   .attr("x", d => d.x - d.width / 2)
@@ -336,29 +392,30 @@ function update(props, state) {
 
   function zoomed() {
     if(state.simulation.alpha() > 0.4) return;
-    var newState;
     if (d3.event.transform.k < state.k) {
       console.log("zoom out");
       pushNewData(props, state, prevTime.format);
+      console.log("prevTime", prevTime, "nextTime", prevTime);
       simulation.nodes(state.simData);
-      newState = {
-        time: prevTime.key,
-        simulation: simulation,
-        simData: state.simData,
-        k: d3.event.transform.k
-      };
-      update(props, newState);
+
+      state.time = prevTime.key;
+      state.simulation = simulation;
+      state.simData = state.simData;
+      state.k =  d3.event.transform.k;
+
+      update(props, state);
     } else {
       if (state.time !== "day") {
+        console.log("zoom in");
         pushNewData(props, state, nextTime.format);
         simulation.nodes(state.simData);
-        newState = {
-          time: nextTime.key,
-          simulation: simulation,
-          simData: state.simData,
-          k: d3.event.transform.k
-        };
-        update(props, newState);
+
+        state.time = nextTime.key;
+        state.simulation = simulation;
+        state.simData = state.simData;
+        state.k = d3.event.transform.k;
+
+        update(props, state);
       } else {
           var newXscale = d3.event.transform.rescaleX(xScale);
           d3.select(".x.axis").call(xAxis.scale(newXscale).ticks(d3.timeDay))
@@ -369,7 +426,6 @@ function update(props, state) {
             .force("collide", rectCollide(simulation.nodes(), 3));
           simulation.alpha(0.4);
           simulation.restart();
-
       }
 
     }
@@ -378,4 +434,16 @@ function update(props, state) {
   }
 }
 
-export default create;
+
+const d3TimeCloud = function() {
+  return {
+    create: create,
+    update: update,
+    mainUpd: null
+  };
+};
+
+export default function() {
+  return new d3TimeCloud;
+}
+

@@ -54,4 +54,6 @@ function rectCollide(nodes, strength) {
   };
 }
 
-export default rectCollide;
+
+var parseTime = d3.timeParse("%Y/%m/%d %H:%M:%S %Z");
+export {parseTime, rectCollide};

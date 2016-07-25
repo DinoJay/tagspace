@@ -215,60 +215,18 @@ function tagListCreate(nodes, cont, foci, mainUpdate) {
     this._nodeMap = nodeMap;
     this._nbs_map = nbs_map;
 
-    // this._root = root;
+    this._root = root;
     this.curTag = root.key;
     this._tmpSource = root;
     this._traverse = traverse;
     // root._children = root.children;
     // root.children = root._children;
-    this._root = root;
     this._path = [];
     tagListUpdate.bind(this)(root, foci, mainUpdate);
 }
 
 
 function tagListUpdate(source, foci, mainUpdate, inputVal) {
-  this._click = d => {
-    var nbs;
-    this._curTag = d.key;
-    if (d.children) {
-      d.path.pop();
-      console.log("D:PATH", d.path);
-      nbs = nbs_map(d, nodeMap);
-      var succs = [];
-      var clonedChilds = _.cloneDeep(d.children);
-      d.children = [];
-      reinsert(d.parent, d.key, clonedChilds.concat(yield0(d, succs)),
-        nodeMap);
-
-      console.log("d.path", d.path);
-      tagListUpdate.bind(this)(source, foci, mainUpdate);
-      this._tmpSource =_.cloneDeep(source);
-
-      foci.sets(d.path)
-          .timerange(null)
-          .start();
-
-      mainUpdate(foci, {search: false, main: true, cloud: false}, {});
-
-    } else {
-      d.path = _.uniq(d.path.concat(d.parent.path, [d.key]));
-      nbs = nbs_map(d, nodeMap);
-
-      d.children = nbs;
-      // var children_ids = nbs.map(d => d.key);
-      // d.old_children = d._children;
-      traverse(source, d.key, nbs.map(d => d.key));
-      tagListUpdate.bind(this)(source, foci, mainUpdate);
-
-      foci.sets(d.path)
-          .start();
-
-      mainUpdate(foci, {search: false, main: true, cloud: false}, {});
-    }
-  };
-
-
   var g = d3.select("#dynTree");
   var svg = d3.select("#dynTreeCont");
 
@@ -296,7 +254,49 @@ function tagListUpdate(source, foci, mainUpdate, inputVal) {
   rootDatum.height = 20;
   rootDatum.width = 50;
 
+  var click = d => {
+    var nbs;
+    this._curTag = d.key;
+    console.log("this cur", this._curTag);
+    if (d.children) {
+      d.path.pop();
+      console.log("D:PATH", d.path);
+      nbs = nbs_map(d, nodeMap);
+      var succs = [];
+      var clonedChilds = _.cloneDeep(d.children);
+      d.children = [];
+      reinsert(d.parent, d.key, clonedChilds.concat(yield0(d, succs)),
+        nodeMap);
 
+      console.log("upd root", root);
+      tagListUpdate.bind(this)(source, foci, mainUpdate);
+      this._tmpSource =_.cloneDeep(source);
+
+      foci.sets(d.path)
+          .start();
+
+
+      mainUpdate(foci, {search: false, main: true, cloud: true}, {});
+    } else {
+      d.path = _.uniq(d.path.concat(d.parent.path, [d.key]));
+      nbs = nbs_map(d, nodeMap);
+
+      d.children = nbs;
+      // var children_ids = nbs.map(d => d.key);
+      // d.old_children = d._children;
+      traverse(source, d.key, nbs.map(d => d.key));
+
+      tagListUpdate.bind(this)(source, foci, mainUpdate);
+      this._tmpSource =_.cloneDeep(source);
+
+      console.log("d.path", d.path);
+      foci.sets(d.path)
+          .start();
+
+      mainUpdate(foci, {search: false, main: true, cloud: true}, {});
+    }
+    this._path = d.path;
+  };
     // nodes.length * barHeight + margin.top + margin.bottom);
 
   // tagListUpdate the nodes…
@@ -385,7 +385,7 @@ function tagListUpdate(source, foci, mainUpdate, inputVal) {
   // Enter any new nodes at the parent's previous position.
   nodeEnter.append("rect")
     .style("fill", color)
-    .on("click", this._click)
+    .on("click", click)
     .on("mouseover", d => {
 
       // var tp = d3.selectAll(".tps").filter(e => {
