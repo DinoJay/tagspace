@@ -143,7 +143,6 @@ function deriveSets(nodes) {
   if (!nodes) return this._groups;
 
   var realNodes = nodes.filter(d => !d.label);
-  var labelNodes = nodes.filter(d => d.label);
 
   var spread_data = _.flatten(realNodes.map(n => {
     var clones = n.tags.map(t => {
@@ -156,34 +155,25 @@ function deriveSets(nodes) {
 
   var nested_data = d3.nest()
     .key(d => d.tag)
-    .entries(spread_data).filter(d => d.values.length > 0);
+    .entries(spread_data).filter(d => d.values.length > 1);
 
-  var uniq_nested_data = _.uniqWith(nested_data, (a, b) => {
-      var aKeys = a.values.map(d => d.__key__);
-      var bKeys = b.values.map(d => d.__key__);
-      return _.isEqual(aKeys, bKeys);
-  });
-
-  // console.log("nested_data length", nested_data.length,
-    // "uniq_nested_data", uniq_nested_data.length);
-
-  var groups = uniq_nested_data.map(g => {
+  var groups = nested_data.map(g => {
     g.id = g.key;
     return g;
   });
 
-  labelNodes.forEach(l => {
-    groups.forEach(g => {
-      if (l.interSet.indexOf(g.key) !== -1) {
-        // l.text = g.id;
-        // TODO: dirty hack, fix this
-        // l.id = g.id + " label";
-        // console.log("label with group!");
-        g.values.push(l);
-      }
-      // else console.log("label without group!");
-    });
-  });
+  // labelNodes.forEach(l => {
+  //   groups.forEach(g => {
+  //     if (l.interSet.indexOf(g.key) !== -1) {
+  //       // l.text = g.id;
+  //       // TODO: dirty hack, fix this
+  //       // l.id = g.id + " label";
+  //       // console.log("label with group!");
+  //       g.values.push(l);
+  //     }
+  //     // else console.log("label without group!");
+  //   });
+  // });
 
   // groups.forEach(d => {
   //   d.values = d.values.map(d => d.data);
@@ -255,6 +245,7 @@ function start() {
 
 
     // that._groups = deriveSets(comps);
+    //
 
     // TODO: dirty hack
     that._setNodes = nodes;
@@ -426,6 +417,7 @@ function extractSets(data) {
 function initSets(arg, union) {
   if (!arg) return this._setNodes;
 
+  var graph;
   var setData;
   if (this._sets) {
     var filterFunc;
@@ -436,8 +428,13 @@ function initSets(arg, union) {
       filterFunc = n => _.intersection(n.sets, arg).length > 0;
     }
 
-    var nodes = this._cachedGraph.nodes
+
+    var setNodes = this._cachedGraph.nodes
         .filter(filterFunc);
+
+    graph = prepareGraph(this, setNodes);
+    var nodes = graph.nodes;
+    var edges = graph.edges;
 
     if (this._timerange) {
       var st = this._timerange[0];
@@ -452,21 +449,35 @@ function initSets(arg, union) {
       }, []);
       this._timerange = null;
     }
-
-    var edges = [];
-    this._cachedGraph.edges.forEach(l => {
-      var src = nodes.findIndex(n => n.__key__ === l.source.__key__);
-      var tgt = nodes.findIndex(n => n.__key__ === l.target.__key__);
-      if (src !== -1 && tgt !== -1)
-        edges.push({
-                    source: src,
-                    target: tgt,
-                    level: l.level
-                  });
-    });
+    //
+    // var edges = [];
+    // nodes.forEach((src, i) => {
+    //   nodes.forEach((tgt, j) => {
+    //     if (_.intersection(src.sets, tgt.sets).length > 0) {
+    //       edges.push({
+    //                   source: i,
+    //                   target: j,
+    //                   id: i + j
+    //                   // level: l.level
+    //                 });
+    //     }
+    //   });
+    // });
+    // edges = _.uniqBy(edges, "id");
+    // console.log("edges", edges);
+    // this._cachedGraph.edges.forEach(l => {
+    //   var src = nodes.findIndex(n => n.__key__ === l.source.__key__);
+    //   var tgt = nodes.findIndex(n => n.__key__ === l.target.__key__);
+    //   if (src !== -1 && tgt !== -1) {
+    //     edges.push({
+    //                 source: src,
+    //                 target: tgt,
+    //                 level: l.level
+    //               });
+    //   }
+    // });
 
     // console.log("oldEdges", oldEdges);
-    console.log("edges", edges);
 
     this._setNodes = nodes;
     this._fociLinks = edges;
@@ -481,7 +492,7 @@ function initSets(arg, union) {
     data.forEach(d => d.date = parseTime(d.created_at));
     this._sets = extractSets(data);
     setData = this._sets.values();
-    var graph = prepareGraph(this, setData);
+    graph = prepareGraph(this, setData);
     this._cachedGraph = graph;
     this._setNodes = graph.nodes;
     // this._bicomps = bicomps.map(g => g.map(i => setData[i]));

@@ -148,9 +148,10 @@ var bundleLine = d3.line()
             .y(d => d.y)
             .curve(d3.curveBundle);
 
-
-var width = window.innerWidth * 2/3;
-var height = window.innerHeight * 2/3;
+var allWidth = window.innerWidth - 50;
+var width = allWidth * 2/3;
+var height = window.innerHeight * 1/2 + 50;
+var widthTagList = allWidth - width;
 
 var viewBox = {
   left: 500,
@@ -312,7 +313,7 @@ function create(diigo) {
   cont.insert("div", ":first-child")
     .attr("class", "view-name")
     .append("h3")
-    .text("node-map");
+    .text("ClusterVis");
 
   cont.append("div")
     .attr("id", "tooltip")
@@ -325,8 +326,12 @@ function create(diigo) {
   //       .style("fill", "none");
             //make transparent (vs black if commented-out)
             //
+
   g.append("g")
      .attr("class", "backdrop-cont");
+
+  g.append("g")
+    .attr("class", "edge-seg");
 
   g.append("g")
     .attr("class", "hull-labels");
@@ -334,8 +339,6 @@ function create(diigo) {
   g.append("g")
      .attr("class", "bubble-cont");
 
-  g.append("g")
-    .attr("class", "edge-seg");
 
   // d3.select("body").append("p").append("input")
   //   .datum({})
@@ -344,7 +347,8 @@ function create(diigo) {
 
   d3.select("body")
     .append("div")
-    .style("height", "400px")
+    .style("width", widthTagList +"px")
+    .style("height", height +"px")
     .attr("class", "tag-list view"); // TODO:
 
   var state = {first: true};
@@ -367,7 +371,7 @@ function update(foci, pattern, state) {
   d3.selectAll(".bd").remove();
 
   var zoomHandler = d3.zoom()
-     .extent([shiftedWidth, shiftedHeight])
+     .extent([width, height])
      .scaleExtent([-100, 40])
      .on("zoom", function() {
         var translate = [d3.event.transform.x, d3.event.transform.y];
@@ -442,7 +446,7 @@ function update(foci, pattern, state) {
 
   var wordScale = d3.scaleLinear()
       .domain(d3.extent(nodes.nestedTags, d => d.values.length))
-      .rangeRound([7, 50/2]);
+      .rangeRound([7, 15]);
 
 
   var zoomDetail = function(d) {
@@ -726,7 +730,6 @@ function update(foci, pattern, state) {
           if (filtered.length === 0)
           docLinks.push({
               id: s.index + t.index,
-              id2: t.index + s.index,
               source: s.index,
               target: t.index
           });
@@ -734,7 +737,7 @@ function update(foci, pattern, state) {
       });
     });
     var aggrLinks = _.uniqBy(docLinks, "id");
-    console.log("deepLinks", deepLinks);
+    // console.log("deepLinks", deepLinks);
 
 
     // var flatLinks = foci._cutEdges.map(l => {
@@ -752,14 +755,14 @@ function update(foci, pattern, state) {
                     .edges(deepLinks);
 
     var bundledEdgeSegments = fbundling();
-
+    var edgeCont = svg.select(".edge-seg");
     bundledEdgeSegments.forEach((d, i) => {
     // for each of the arrays in the results
     // draw a line between the subdivions points for that edge
 
       var src = d[0];
       var tgt = d[d.length - 1];
-      var edgeSegs = svg.select(".edge-seg").selectAll("g")
+      var edgeSegs = edgeCont.selectAll("g")
         .data([{source: src.comp, target: tgt.comp, path: d, id: i, focus: tgt.comp}], (d) => d.id)
         .enter()
         .append("g")
@@ -769,7 +772,7 @@ function update(foci, pattern, state) {
         .style("stroke-width", 5)
         .style("stroke", "gray")
         .style("fill", "none")
-        .style("stroke-opacity", 0.1) //use opacity as blending;
+        .style("stroke-opacity", 0.01) //use opacity as blending;
         .attr("d", d => bundleLine(d.path))
         .on("click", function(d) {
           console.log("src", src, "tgt", src);
@@ -883,6 +886,9 @@ function update(foci, pattern, state) {
               console.log("tagNodes", tagNodes);
 
               console.log("group", group);
+              d3.selectAll("tspan")
+                .filter(d => group.interTags.includes(d.key))
+                .attr("fill", "red");
               // var newRoot = _.cloneDeep(tagList._root);
               var rootkey = group.interTags.join(",");
               // newRoot.children = extractTags(comp.nodes).nested
@@ -896,13 +902,15 @@ function update(foci, pattern, state) {
             d3.select(this).attr("opacity", 0.5);
             d3.selectAll(".doc").style("opacity", 1);
 
-            var tp = d3.select(".label-cont-" + c.id);
-            tp.selectAll("tspan").remove();
-            tp.selectAll("tspan")
-              .data(c.sets)
-              .enter()
-              .append("tspan")
-              .call(styleTspan(wordScale));
+            d3.selectAll("tspan")
+              .attr("fill", "black");
+            // var tp = d3.select(".label-cont-" + c.id);
+            // tp.selectAll("tspan").remove();
+            // tp.selectAll("tspan")
+            //   .data(c.sets)
+            //   .enter()
+            //   .append("tspan")
+            //   .call(styleTspan(wordScale));
 
             d3.select("#tooltip").selectAll("*").remove();
             console.log("tagList._root", tagList._root);
@@ -912,7 +920,7 @@ function update(foci, pattern, state) {
         bubble.exit().remove();
         bubbleGroup.exit().remove();
 
-      }, c.sets, 0.034); // bigger: 0.0048, 0.024 (with updated bubble points)
+      }, c.sets, 0.024); // bigger: 0.0048, 0.024 (with updated bubble points)
     });
 
     d3.select("#zoom-hull").remove();
@@ -1004,8 +1012,8 @@ function update(foci, pattern, state) {
       .append("div")
       .attr("class", "time-cloud view")
       // TODO
-      .style("height", "300px")
-      .style("width", "1350px");
+      // .style("height", "300px")
+      .style("width",  allWidth + "px");
     timeCloud.create(nodes.spreadTags, foci, timeCloudDiv, update, tagList);
   }
   // console.log("foci._cutEdges", foci._cutEdges);
@@ -1013,7 +1021,7 @@ function update(foci, pattern, state) {
 }
 
 d3.json("diigo.json", function(error, data) {
-  var diigo = data.slice(0, 100).map((d, i) => {
+  var diigo = data.slice(0, 200).map((d, i) => {
     d.tags = d.tags.split(",");
     d.id = i;
     return d;

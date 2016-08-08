@@ -132,7 +132,7 @@ function create(data, foci, cont, mainUpd, tagList) {
     .append("div")
     .attr("class", "view-name")
     .append("h3")
-    .text("time-cloud")
+    .text("TimeCloud")
     .on("click", () => d3.select(".paneOptions")
                          .style("left", margin.left + "px")
                          .style("top", 450 + "px")

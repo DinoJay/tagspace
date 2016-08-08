@@ -15,14 +15,12 @@ var stepLine = d3.line().curve(d3.curveStepBefore) .x(d => d.x)
         .y(d => d.y);
 
 var margin = {top: 0, right: 0, bottom: 0, left: 30},
-    width = 300 - margin.left - margin.right;
+    width = 400 - margin.left - margin.right;
 // function neighbors(a, linkedByIndex, nodes) {
 //   var nb;
 //   var nbs = [];
 //
-//   // console.log("a", a);
-//   for (var property in linkedByIndex) {
-//     var s = property.split(",").map(d => parseInt(d));
+//   // console.log("a", a); for (var property in linkedByIndex) { var s = property.split(",").map(d => parseInt(d));
 //     if (s[0] === a.index) {
 //       nb = nodes[s[1]];
 //       // console.log("nb", nb);
@@ -187,12 +185,20 @@ function tagListCreate(nodes, cont, foci, mainUpdate) {
 
       // maxBarWidth = width * 0.8;
 
+  d3.select(".tag-list")
+    .insert("div", ":first-child")
+    .attr("class", "view-name")
+    .style("position", "relative")
+    // .style("right", "0px")
+    .append("h3")
+    .text("SearchTree");
 
   d3.select(".tag-list")
       .append("div")
       .append("input")
       .attr("id", "search-tree")
       .style("position", "relative");
+
 
   // TODO: make dynamic
   // var cont = d3.select("body")
@@ -205,7 +211,7 @@ function tagListCreate(nodes, cont, foci, mainUpdate) {
   svg
       .attr("width", width + margin.left + margin.right)
       .attr("id", "dynTreeCont")
-      .style("margin-top", - root.height - 11 +"px")
+      .style("margin-top", - root.height - 10 +"px")
     .append("g")
       .attr("overflow", "scroll")
       .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
@@ -249,7 +255,7 @@ function tagListUpdate(source, foci, mainUpdate, inputVal) {
           .timerange(null)
           .start();
 
-      mainUpdate(foci, {search: false, main: true, cloud: false}, {});
+      mainUpdate(foci, {search: false, main: true, cloud: true}, {});
 
     } else {
       d.path = _.uniq(d.path.concat(d.parent.path, [d.key]));
@@ -264,7 +270,7 @@ function tagListUpdate(source, foci, mainUpdate, inputVal) {
       foci.sets(d.path)
           .start();
 
-      mainUpdate(foci, {search: false, main: true, cloud: false}, {});
+      mainUpdate(foci, {search: false, main: true, cloud: true}, {});
     }
   };
 
