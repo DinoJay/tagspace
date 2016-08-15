@@ -218,6 +218,22 @@ function start() {
     });
     console.log("cutEdges", links.filter(l => l.cut));
 
+
+
+  // var d3cola = cola.d3adaptor()
+  //       .avoidOverlaps(true)
+  //       .size(center);
+  //  d3cola
+  //     .nodes(nodes)
+  //     .links(links)
+  //     .flowLayout("y", 30)
+  //     .symmetricDiffLinkLengths(6)
+  //     .start(30, 20, 50);
+  //
+  // var n = 30;
+  // for (var i = 0; i < n; ++i) d3cola.tick();
+  // d3cola.stop();
+
     var simulation = d3_force.forceSimulation(nodes)
       // .force("charge", d3.forceManyBody())
       .force("link", d3_force.forceLink()
